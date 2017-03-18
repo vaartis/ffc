@@ -1,6 +1,12 @@
 #pragma once
 
-using namespace std;
+using std::string;
+using std::unique_ptr;
+using std::vector;
+using std::map;
+using std::pair;
+using std::exception;
+using std::stringstream;
 
 enum class TType {
     Int,
