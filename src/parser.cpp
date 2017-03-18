@@ -10,22 +10,6 @@
 
 using namespace std;
 
-enum class TType;
-enum class Token;
-
-class BaseAST;
-class IntAST;
-class FloatAST;
-class BoolAST;
-class FncDefAST;
-class FncCallAST;
-class DeclAST;
-class AssAST;
-class IdentAST;
-class RetAST;
-
-class TokenStream;
-
 TokenStream::TokenStream(string s) {
     text = make_unique<stringstream>(s);
 
