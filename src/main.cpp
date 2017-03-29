@@ -19,10 +19,9 @@
 using namespace std;
 using namespace llvm;
 
-string getFileContent(const string &pth) {
+string getFileContent(const string pth) {
   ifstream file(pth);
   string content((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
-  file.close();
 
   return content;
 }
@@ -64,10 +63,11 @@ class CodeGen {
     private:
         vector< unique_ptr<FncDefAST> > ast;
         struct LLVMFn {
-            LLVMFn(Function *f, vector<Argument *> ars, map<string, Value *> vars) : fn(f), arguments(ars), variables(vars) {}
+            LLVMFn(Function *f, vector<Argument *> ars, map<string, Value *> vars, TType tp) : fn(f), arguments(ars), variables(vars), ret_type(tp) {}
             Function *fn;
             vector<Argument *> arguments;
             map<string, Value *> variables;
+            TType ret_type;
         };
 
         map<string, LLVMFn> functions;
@@ -107,19 +107,36 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
         if (decl->value != nullptr) {
             Value *v = genExpr(move(decl->value));
+
+            if (t != v->getType())
+                throw runtime_error(string("Invalid type assigned to ") + decl->name);
+
             return builder->CreateStore(v, alloc, false);
         }
     } else if (auto ass = dynamic_cast<AssAST *>(obj.get())) {
         try {
-            auto var = functions.at(curr_fn_name).variables.at(ass->name); 
-            return builder->CreateStore(genExpr(move(ass->value)), var, false);
+            auto var = functions.at(curr_fn_name).variables.at(ass->name);
+
+            Value *v = genExpr(move(ass->value));
+
+            if (v->getType() != getLLVMType(functions.at(curr_fn_name).ret_type))
+                throw runtime_error(string("Invalid type assigned to ") + ass->name);
+
+            return builder->CreateStore(v, var, false);
         } catch (out_of_range) {
             throw runtime_error(string("Undefined variable: ") + ass->name);
         }
     } else if (auto ret = dynamic_cast<RetAST *>(obj.get())) {
         if (ret->value != nullptr) {
-            return builder->CreateRet(genExpr(move(ret->value)));
+            Value *retxpr = genExpr(move(ret->value));
+
+            if (retxpr->getType() != getLLVMType(functions.at(curr_fn_name).ret_type))
+                throw runtime_error("Invalid return type");
+
+            return builder->CreateRet(retxpr);
         } else {
+            if (functions.at(curr_fn_name).ret_type != TType::Void)
+                throw runtime_error("Can't return nothing from a non-void function");
             return builder->CreateRetVoid();
         }
     } else if (auto ca = dynamic_cast<FncCallAST *>(obj.get())) {
@@ -203,7 +220,7 @@ void CodeGen::AST2IR() {
             fn_vars.emplace(arg_name, alloc);
         }
 
-        functions.emplace(fn->name, LLVMFn(fnc, move(fn_args), fn_vars));
+        functions.emplace(fn->name, LLVMFn(fnc, move(fn_args), fn_vars, fn->ret_type));
 
         for (auto &expr : fn->body) {
             genExpr(move(expr));
