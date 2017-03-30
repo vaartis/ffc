@@ -12,16 +12,19 @@ enum class TType {
     Int,
     Float,
     Bool,
+    Str,
     Void
 };
 
 enum class Token {
     None,
     Fnc,
+    Extern,
     Ident,
     IntLit,
     FloatLit,
     BoolLit,
+    StrLit,
     OpP,
     ClP,
     OpCB,
@@ -62,6 +65,13 @@ class FloatAST : public BaseAST {
         float value;
 };
 
+class StrAST : public BaseAST {
+    public:
+        StrAST(string s) : value(s) {}
+
+        string value;
+};
+
 class BoolAST : public BaseAST {
     public:
         BoolAST(bool b) : value(b) {}
@@ -76,6 +86,15 @@ class FncDefAST : public BaseAST {
         string name;
         map<string, TType> args;
         vector< unique_ptr<BaseAST> > body;
+        TType ret_type;
+};
+
+class ExternFncAST : public BaseAST {
+    public:
+        ExternFncAST(string s, vector<TType> ar, TType r) : name(s), args(ar), ret_type(r) {}
+
+        string name;
+        vector<TType> args;
         TType ret_type;
 };
 
@@ -147,16 +166,22 @@ class ASTParser {
         ASTParser(string s);
         ~ASTParser() {}
 
-        vector< unique_ptr<FncDefAST> > get_functions() {
+        vector<unique_ptr<FncDefAST>> get_functions() {
             return move(fns);
         }
+
+        vector<unique_ptr<ExternFncAST>> get_ext_functions() {
+            return move(exts);
+        }
+
     private:
         TokenStream tokens;
 
         string IdentStr;
         Token currTok = Token::None;
 
-        vector< unique_ptr<FncDefAST> > fns;
+        vector<unique_ptr<FncDefAST>> fns;
+        vector<unique_ptr<ExternFncAST>> exts;
 
         Token getNextTok() {
             pair<Token, string> r = tokens.get();
@@ -167,10 +192,12 @@ class ASTParser {
         TType strToType(string s);
 
         unique_ptr<FncDefAST> parseFncDef();
+        unique_ptr<ExternFncAST> parseExternFnc();
 
         unique_ptr<BaseAST> parseIntLiteral();
         unique_ptr<BaseAST> parseFloatLiteral();
         unique_ptr<BaseAST> parseBoolLiteral();
+        unique_ptr<BaseAST> parseStrLiteral();
 
         unique_ptr<BaseAST> parseStmt();
         unique_ptr<BaseAST> parseFncCall();

@@ -25,6 +25,16 @@ pair<Token, string> TokenStream::getTok() {
     while (isspace(lastchr))
         lastchr = text->get();
 
+    if (lastchr == '"') {
+        lastchr = text->get();
+        while (lastchr != '"') {
+            IdentStr += lastchr;
+            lastchr = text->get();
+        }
+        lastchr = text->get();
+        return make_pair(Token::StrLit, IdentStr);
+    }
+
     bool f = false;
     if (isalpha(lastchr)) {
         f = true;
@@ -45,24 +55,27 @@ pair<Token, string> TokenStream::getTok() {
         } while (isdigit(lastchr) || lastchr == '.');
 
         if (!f)
-            return pair<Token, string>(Token::IntLit, numstr);
+            return make_pair(Token::IntLit, numstr);
         else
-            return pair<Token, string>(Token::FloatLit, numstr);
+            return make_pair(Token::FloatLit, numstr);
     }
 
-    #define match(wh, to, type) if (wh == to) return pair<Token, string>(type, IdentStr);
+    #define match(wh, to, type) if (wh == to)\
+            return make_pair(type, IdentStr);
 
     #define match_char(to, type) if (lastchr == to) {\
         lastchr = text->get();\
         IdentStr = string(1, to);\
-        return pair<Token, string>(type, IdentStr);\
+        return make_pair(type, IdentStr);\
     }
 
     match(IdentStr, "fnc", Token::Fnc);
+    match(IdentStr, "extern", Token::Extern);
     
     match(IdentStr, "int", Token::Type);
     match(IdentStr, "float", Token::Type);
     match(IdentStr, "bool", Token::Type);
+    match(IdentStr, "str", Token::Type);
 
     match(IdentStr, "true", Token::BoolLit);
     match(IdentStr, "false", Token::BoolLit);
@@ -80,7 +93,7 @@ pair<Token, string> TokenStream::getTok() {
         match_char(';', Token::Semicolon);
     }
 
-    return pair<Token, string>(Token::Ident, IdentStr);
+    return make_pair(Token::Ident, IdentStr);
 }
 
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
@@ -88,12 +101,21 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
         try {
             if (currTok == Token::Fnc) {
                 fns.push_back(parseFncDef());
+            } else if (currTok == Token::Extern) {
+                exts.push_back(parseExternFnc());
             }
             getNextTok();
         } catch (TokenStream::EOFException) {
             break;
         }
     }
+}
+
+/// str ::= "char+"
+unique_ptr<BaseAST> ASTParser::parseStrLiteral() {
+    auto res = make_unique<StrAST>(IdentStr);
+    getNextTok();
+    return move(res);
 }
 
 /// number ::= <number>
@@ -110,8 +132,50 @@ TType ASTParser::strToType(string s) {
         return TType::Float;
     else if (s == "bool")
         return TType::Bool;
+    else if (s == "str")
+        return TType::Str;
     else
         throw runtime_error("Unknown type");
+}
+
+unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
+    getNextTok(); // eat extern
+
+    assert(currTok == Token::Ident);
+
+    string name = IdentStr;
+
+    getNextTok();
+
+    assert(currTok == Token::OpP);
+
+    getNextTok(); // eat (
+
+    vector<TType> args;
+
+    while (currTok != Token::ClP) {
+        assert(currTok == Token::Type);
+
+        TType t = strToType(IdentStr);
+        args.push_back(t);
+
+        getNextTok();
+    }
+
+    getNextTok(); // eat )
+
+    TType ret_type = TType::Void;
+
+    if (currTok == Token::Type) {
+        ret_type = strToType(IdentStr);
+        getNextTok(); // eat type
+    }
+
+    assert(currTok == Token::Semicolon);
+
+    auto res = make_unique<ExternFncAST>(name, args, ret_type);
+
+    return res;
 }
 
 /// fncdef ::= 'fnc' <literal> '(' (<type> <literal>)* ')' <type>*
@@ -138,7 +202,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
 
         assert (currTok == Token::Ident);
 
-        args.insert(pair<string, TType>(IdentStr, t));
+        args.insert(make_pair(IdentStr, t));
 
         getNextTok();
     }
@@ -200,12 +264,21 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
         return parseVar();
     } else if (cTok == Token::Ident && nTok == Token::OpP) {
         return parseFncCall();
-    } else if (currTok == Token::IntLit) {
-        return parseIntLiteral();
-    } else if (cTok == Token::Ret) {
-        return parseRet();
-    } else if (cTok == Token::If) {
-        return parseIf();
+    }
+
+    switch (currTok) {
+        case Token::IntLit:
+            return parseIntLiteral();
+        case Token::FloatLit:
+            return parseFloatLiteral();
+        case Token::StrLit:
+            return parseStrLiteral();
+        case Token::Ret:
+            return parseRet();
+        case Token::If:
+            return parseIf();
+        default:
+            break;
     }
 
     return nullptr;
@@ -275,6 +348,8 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
         return parseFloatLiteral();
     } else if (currTok == Token::BoolLit) {
         return parseBoolLiteral();
+    } else if (currTok == Token::StrLit) {
+        return parseStrLiteral();
     } else if (currTok == Token::Ident) {
         Token nxt = tokens.peek().first;
 

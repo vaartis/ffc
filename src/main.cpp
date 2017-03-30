@@ -51,6 +51,7 @@ class CodeGen {
             ASTParser parser(getFileContent(fname));
 
             ast = parser.get_functions();
+            exts = parser.get_ext_functions();
 
             AST2IR();
 
@@ -62,6 +63,7 @@ class CodeGen {
 
     private:
         vector< unique_ptr<FncDefAST> > ast;
+        vector< unique_ptr<ExternFncAST> > exts;
         struct LLVMFn {
             LLVMFn(Function *f, vector<Argument *> ars, map<string, Value *> vars, TType tp) : fn(f), arguments(ars), variables(vars), ret_type(tp) {}
             Function *fn;
@@ -94,6 +96,8 @@ Type *CodeGen::getLLVMType(TType t) {
                 return builder->getFloatTy();
             case TType::Bool:
                 return builder->getInt1Ty();
+            case TType::Str:
+                return builder->getInt8PtrTy();
         }
 }
 
@@ -157,6 +161,8 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         return ConstantFP::get(getLLVMType(TType::Float), f->value);
     } else if (auto b = dynamic_cast<BoolAST *>(obj.get())) {
         return ConstantInt::get(getLLVMType(TType::Bool), b->value);
+    } else if (auto s = dynamic_cast<StrAST *>(obj.get())) {
+        return builder->CreateGlobalStringPtr(s->value);
     } else if (auto v = dynamic_cast<IdentAST *>(obj.get())) {
         try {
             auto val = functions.at(curr_fn_name).variables.at(v->value);;
@@ -195,12 +201,31 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 }
 
 void CodeGen::AST2IR() {
+
+    for (auto &ex : this->exts) {
+        vector<Type *> ext_args;
+        for (auto &ar : ex->args) {
+            ext_args.push_back(getLLVMType(ar));
+        }
+
+        FunctionType *extTy = FunctionType::get(getLLVMType(ex->ret_type), ext_args, false);
+
+        Function *ext = cast<Function>(module->getOrInsertFunction(ex->name, extTy));
+
+        vector<Argument *> al;
+        for (auto &arg_ths : ext->getArgumentList()) {
+            al.push_back(&arg_ths);
+        }
+
+        functions.emplace(ex->name, LLVMFn(ext, al, map<string, Value *>(), ex->ret_type));
+    }
+
     for (auto &fn : this->ast) {
         cout << "Parsing " << fn->name << endl;
         curr_fn_name = fn->name;
 
         FunctionType *tp = FunctionType::get(getLLVMType(fn->ret_type), false); 
-        Function *fnc(Function::Create(tp, Function::ExternalLinkage, fn->name, module.get()));
+        Function *fnc = Function::Create(tp, Function::ExternalLinkage, fn->name, module.get());
 
         BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
         builder->SetInsertPoint(enter);
