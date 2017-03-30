@@ -147,10 +147,22 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         try {
             LLVMFn callee = functions.at(ca->name);
 
+            if (callee.arguments.size() != ca->args.size())
+                throw runtime_error(string("Wrong number of args for function call: ") + ca->name);
+
             vector<Value *> argms;
-            for (auto &ar : ca->args) {
-                argms.push_back(genExpr(move(ar)));
+            for (int i = 0; i < ca->args.size(); i++) {
+                Value *this_arg = genExpr(move(ca->args[i]));
+
+                int j = 0;
+                for (auto &ar : callee.fn->getArgumentList())
+                    if (j++ == i)
+                        if (ar.getType() != this_arg->getType())
+                            throw runtime_error(string("Wrong type in function call: ") + ca->name);
+
+                argms.push_back(this_arg);
             }
+
             return builder->CreateCall(callee.fn, argms);
         } catch(out_of_range) {
             throw runtime_error(string("Undefined function: ") + ca->name);
