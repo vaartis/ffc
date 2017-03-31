@@ -17,6 +17,8 @@ enum class TType {
 };
 
 enum class Token {
+    Operator,
+    OperatorDef,
     None,
     Fnc,
     Extern,
@@ -42,11 +44,23 @@ class BaseAST {
         virtual ~BaseAST() {}
 };
 
-class IntAST : public BaseAST {
+class OperatorDefAST : public BaseAST {
     public:
-        IntAST(int i) : value(i) {}
+    OperatorDefAST(string nm, pair<string, TType> l, pair<string, TType> r, TType t, vector<unique_ptr<BaseAST>> bd) : name(nm), lhs(l), rhs(r), ret_type(t), body(move(bd)) {}
 
-        int value;
+        string name;
+        pair<string, TType> lhs;
+        pair<string, TType> rhs;
+        vector< unique_ptr<BaseAST> > body;
+        TType ret_type;
+};
+
+class OperatorAST : public BaseAST {
+    public:
+    OperatorAST(string nm, unique_ptr<BaseAST> l, unique_ptr<BaseAST> r) : name(nm), lhs(move(l)), rhs(move(r)) {}
+    string name;
+    unique_ptr<BaseAST> lhs;
+    unique_ptr<BaseAST> rhs;
 };
 
 class IfAST : public BaseAST {
@@ -56,6 +70,13 @@ class IfAST : public BaseAST {
         unique_ptr<BaseAST> cond;
         vector< unique_ptr<BaseAST> > body;
         vector< unique_ptr<BaseAST> > else_body;
+};
+
+class IntAST : public BaseAST {
+    public:
+        IntAST(int i) : value(i) {}
+
+        int value;
 };
 
 class FloatAST : public BaseAST {
@@ -174,6 +195,10 @@ class ASTParser {
             return move(exts);
         }
 
+        vector<unique_ptr<OperatorDefAST>> get_operators() {
+            return move(ops);
+        }
+
     private:
         TokenStream tokens;
 
@@ -182,6 +207,7 @@ class ASTParser {
 
         vector<unique_ptr<FncDefAST>> fns;
         vector<unique_ptr<ExternFncAST>> exts;
+        vector<unique_ptr<OperatorDefAST>> ops;
 
         Token getNextTok() {
             pair<Token, string> r = tokens.get();
@@ -193,6 +219,7 @@ class ASTParser {
 
         unique_ptr<FncDefAST> parseFncDef();
         unique_ptr<ExternFncAST> parseExternFnc();
+        unique_ptr<OperatorDefAST> parseOperatorDef();
 
         unique_ptr<BaseAST> parseIntLiteral();
         unique_ptr<BaseAST> parseFloatLiteral();
@@ -205,4 +232,5 @@ class ASTParser {
         unique_ptr<BaseAST> parseExpr();
         unique_ptr<BaseAST> parseRet();
         unique_ptr<BaseAST> parseIf();
+        unique_ptr<BaseAST> parseOperator(unique_ptr<BaseAST> lhs);
 };

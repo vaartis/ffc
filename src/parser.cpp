@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <algorithm>
 
 #include <assert.h>
 
@@ -35,11 +36,23 @@ pair<Token, string> TokenStream::getTok() {
         return make_pair(Token::StrLit, IdentStr);
     }
 
+    static const char op_chars[] = "!~@#$%^&*-+\\/<>";
+
+    if (any_of(begin(op_chars), end(op_chars), [](char c) { return lastchr == c; })) {
+        IdentStr = lastchr;
+        lastchr = text->get();
+        while (any_of(begin(op_chars), end(op_chars), [](char c) { return lastchr == c; })) {
+            IdentStr += lastchr;
+            lastchr = text->get();
+        }
+        return make_pair(Token::Operator, IdentStr);
+    }
+
     bool f = false;
-    if (isalpha(lastchr)) {
+    if (isalpha(lastchr) || lastchr == '_') {
         f = true;
         IdentStr = lastchr;
-        while (isalnum((lastchr = text->get())))
+        while (isalnum((lastchr = text->get())) || lastchr == '_')
             IdentStr += lastchr;
     }
 
@@ -71,6 +84,7 @@ pair<Token, string> TokenStream::getTok() {
 
     match(IdentStr, "fnc", Token::Fnc);
     match(IdentStr, "extern", Token::Extern);
+    match(IdentStr, "operator", Token::OperatorDef);
     
     match(IdentStr, "int", Token::Type);
     match(IdentStr, "float", Token::Type);
@@ -103,6 +117,8 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                 fns.push_back(parseFncDef());
             } else if (currTok == Token::Extern) {
                 exts.push_back(parseExternFnc());
+            } else if (currTok == Token::OperatorDef) {
+                ops.push_back(parseOperatorDef());
             }
             getNextTok();
         } catch (TokenStream::EOFException) {
@@ -122,6 +138,20 @@ unique_ptr<BaseAST> ASTParser::parseStrLiteral() {
 unique_ptr<BaseAST> ASTParser::parseIntLiteral() {
     auto res = make_unique<IntAST>(stoi(IdentStr));
     getNextTok();
+    return move(res);
+}
+
+unique_ptr<BaseAST> ASTParser::parseFloatLiteral() {
+    auto res = make_unique<FloatAST>(stof(IdentStr));
+    getNextTok();
+    return move(res);
+}
+
+unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
+    bool b = (IdentStr == "true") ? true  : false;
+    auto res = make_unique<BoolAST>(b);
+    getNextTok();
+
     return move(res);
 }
 
@@ -178,6 +208,65 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     return res;
 }
 
+unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
+    getNextTok(); // eat operator
+
+    assert(currTok == Token::Operator);
+
+    string name = IdentStr;
+
+    getNextTok(); // eat name
+
+    pair<string, TType> lhs;
+    pair<string, TType> rhs;
+
+    assert(currTok == Token::OpP);
+
+    getNextTok();
+    assert(currTok == Token::Type);
+    lhs.second = strToType(IdentStr);
+    getNextTok();
+    assert(currTok == Token::Ident);
+    lhs.first = IdentStr;
+
+    getNextTok();
+    assert(currTok == Token::Type);
+    rhs.second = strToType(IdentStr);
+    getNextTok();
+    assert(currTok == Token::Ident);
+    rhs.first = IdentStr;
+    getNextTok();
+
+    assert(currTok == Token::ClP);
+    getNextTok(); // eat )
+
+    assert(currTok == Token::Type);
+    TType ret_type = strToType(IdentStr);
+    getNextTok(); // eat type
+
+    assert(currTok == Token::OpCB);
+
+    getNextTok(); //eat {
+
+    vector< unique_ptr<BaseAST> > body;
+
+    while (currTok != Token::ClCB) {
+        bool skip_sm = false;
+
+        if (currTok == Token::If)
+            skip_sm = true;
+
+        body.push_back(parseStmt());
+
+        if (currTok != Token::ClCB && skip_sm == false) {
+            assert(currTok == Token::Semicolon);
+            getNextTok();
+        }
+    }
+
+    return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
+}
+
 /// fncdef ::= 'fnc' <literal> '(' (<type> <literal>)* ')' <type>*
 unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     getNextTok(); // eat fnc
@@ -218,7 +307,6 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     assert(currTok == Token::OpCB);
 
     getNextTok(); //eat {
-
 
     vector< unique_ptr<BaseAST> > body;
 
@@ -327,21 +415,18 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
     return make_unique<IfAST>(move(cond), move(body), move(else_body));
 }
 
-unique_ptr<BaseAST> ASTParser::parseFloatLiteral() {
-    auto res = make_unique<FloatAST>(stof(IdentStr));
-    getNextTok();
-    return move(res);
-}
-
-unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
-    bool b = (IdentStr == "true") ? true  : false;
-    auto res = make_unique<BoolAST>(b);
-    getNextTok();
-
-    return move(res);
-}
-
 unique_ptr<BaseAST> ASTParser::parseExpr() {
+    static bool parsing_op = false;
+
+    Token nxt = tokens.peek().first;
+
+    if (!parsing_op && nxt == Token::Operator) {
+        parsing_op = true;
+        auto lhs = parseExpr();
+        parsing_op = false;
+        return parseOperator(move(lhs));
+    }
+
     if (currTok == Token::IntLit) {
         return parseIntLiteral();
     } else if (currTok == Token::FloatLit) {
@@ -351,8 +436,6 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
     } else if (currTok == Token::StrLit) {
         return parseStrLiteral();
     } else if (currTok == Token::Ident) {
-        Token nxt = tokens.peek().first;
-
         if (nxt == Token::OpP) {
             return parseFncCall();
         } else {
@@ -397,6 +480,14 @@ unique_ptr<BaseAST> ASTParser::parseVar() {
     }
 
     throw runtime_error("Unknown token");
+}
+
+unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {
+    string name = IdentStr;
+    getNextTok(); // eat op
+    auto rhs = parseExpr();
+
+    return make_unique<OperatorAST>(name, move(lhs), move(rhs));
 }
 
 // fncall ::= <literal> '(' <literal>* ')'
