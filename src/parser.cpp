@@ -21,7 +21,6 @@ TokenStream::TokenStream(string s) {
 
 pair<Token, string> TokenStream::getTok() {
     string IdentStr;
-    static char lastchr = ' ';
 
     while (isspace(lastchr))
         lastchr = text->get();
@@ -38,10 +37,10 @@ pair<Token, string> TokenStream::getTok() {
 
     static const char op_chars[] = "!~@#$%^&*-+\\/<>";
 
-    if (any_of(begin(op_chars), end(op_chars), [](char c) { return lastchr == c; })) {
+    if (any_of(begin(op_chars), end(op_chars), [&](char c) { return lastchr == c; })) {
         IdentStr = lastchr;
         lastchr = text->get();
-        while (any_of(begin(op_chars), end(op_chars), [](char c) { return lastchr == c; })) {
+        while (any_of(begin(op_chars), end(op_chars), [&](char c) { return lastchr == c; })) {
             IdentStr += lastchr;
             lastchr = text->get();
         }
@@ -85,6 +84,7 @@ pair<Token, string> TokenStream::getTok() {
     match(IdentStr, "fnc", Token::Fnc);
     match(IdentStr, "extern", Token::Extern);
     match(IdentStr, "operator", Token::OperatorDef);
+    match(IdentStr, "include", Token::Include);
     
     match(IdentStr, "int", Token::Type);
     match(IdentStr, "float", Token::Type);
@@ -119,12 +119,28 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                 exts.push_back(parseExternFnc());
             } else if (currTok == Token::OperatorDef) {
                 ops.push_back(parseOperatorDef());
+            } else if(currTok == Token::Include) {
+                incls.push_back(parseInclude());
             }
             getNextTok();
         } catch (TokenStream::EOFException) {
             break;
         }
     }
+}
+
+/// include = include <string literal> <string literal>*
+unique_ptr<IncludeAST> ASTParser::parseInclude() {
+    getNextTok(); // eat include
+    assert(currTok == Token::StrLit);
+    vector<string> mods;
+    while (currTok != Token::Semicolon) {
+        assert(currTok == Token::StrLit);
+        mods.push_back(IdentStr);
+        getNextTok();
+    }
+
+    return make_unique<IncludeAST>(mods);
 }
 
 /// str ::= "char+"
@@ -148,7 +164,7 @@ unique_ptr<BaseAST> ASTParser::parseFloatLiteral() {
 }
 
 unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
-    bool b = (IdentStr == "true") ? true  : false;
+    bool b = (IdentStr == "true") ? true : false;
     auto res = make_unique<BoolAST>(b);
     getNextTok();
 

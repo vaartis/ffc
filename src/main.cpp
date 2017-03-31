@@ -6,6 +6,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
 
+#include "llvm/Linker/Linker.h"
+
 #include <fstream>
 #include <vector>
 #include <iostream>
@@ -19,8 +21,15 @@
 using namespace std;
 using namespace llvm;
 
+LLVMContext context;
+
 string getFileContent(const string pth) {
   ifstream file(pth);
+
+  if (file.fail()) {
+      throw runtime_error(string("File does not exist: ") + pth);
+  }
+
   string content((istreambuf_iterator<char>(file)), istreambuf_iterator<char>());
 
   return content;
@@ -44,15 +53,18 @@ bool isfloat(const std::string &s) {
 
 class CodeGen {
     public:
-        CodeGen(string fname) {
-            module = make_shared<Module>(fname, context);
+        CodeGen(string fnm) {
+            fname = fnm.substr(0, fnm.length() - 3);
+
+            module = make_shared<Module>(fname, context); // .ff
             builder = make_shared< IRBuilder<> >(context);
 
-            ASTParser parser(getFileContent(fname));
+            ASTParser parser(getFileContent(fname + ".ff"));
 
             ast = parser.get_functions();
             exts = parser.get_ext_functions();
             ops = parser.get_operators();
+            incls = parser.get_includes();
 
             AST2IR();
 
@@ -63,21 +75,23 @@ class CodeGen {
         }
 
     private:
+        string fname;
+        shared_ptr<Module> module;
+
         vector<unique_ptr<FncDefAST>> ast;
         vector<unique_ptr<ExternFncAST>> exts;
         vector<unique_ptr<OperatorDefAST>> ops;
+        vector<unique_ptr<IncludeAST>> incls;
+
         struct LLVMFn {
-            LLVMFn(Function *f, map<string, Value *> vars, TType tp) : fn(f), variables(vars), ret_type(tp) {}
+            LLVMFn(Function *f, map<string, Value *> vars, Type *tp) : fn(f), variables(vars), ret_type(tp) {}
             Function *fn;
             map<string, Value *> variables;
-            TType ret_type;
+            Type *ret_type;
         };
 
         map<string, LLVMFn> functions;
 
-        LLVMContext context;
-
-        shared_ptr<Module> module;
         shared_ptr<IRBuilder<> > builder;
 
         string curr_fn_name;
@@ -135,12 +149,12 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         if (ret->value != nullptr) {
             Value *retxpr = genExpr(move(ret->value));
 
-            if (retxpr->getType() != getLLVMType(functions.at(curr_fn_name).ret_type))
+            if (retxpr->getType() != functions.at(curr_fn_name).ret_type)
                 throw runtime_error("Invalid return type");
 
             return builder->CreateRet(retxpr);
         } else {
-            if (functions.at(curr_fn_name).ret_type != TType::Void)
+            if (functions.at(curr_fn_name).ret_type != FunctionType::get(getLLVMType(TType::Void), false))
                 throw runtime_error("Can't return nothing from a non-void function");
             return builder->CreateRetVoid();
         }
@@ -250,6 +264,16 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 }
 
 void CodeGen::AST2IR() {
+    for (auto &in : this->incls) {
+        for (string mod : in->modules) {
+            CodeGen m(mod + ".ff");
+            for (auto &o_fn : m.module->getFunctionList()) {
+                Function *ef = cast<Function>(module->getOrInsertFunction(o_fn.getName(), o_fn.getFunctionType()));
+                functions.emplace(o_fn.getName(), LLVMFn(ef, map<string, Value*>(), o_fn.getReturnType()));
+            }
+        }
+    }
+
     for (auto &ex : this->exts) {
         vector<Type *> ext_args;
         for (auto &ar : ex->args) {
@@ -260,7 +284,7 @@ void CodeGen::AST2IR() {
 
         Function *ext = cast<Function>(module->getOrInsertFunction(ex->name, extTy));
 
-        functions.emplace(ex->name, LLVMFn(ext, map<string, Value *>(), ex->ret_type));
+        functions.emplace(ex->name, LLVMFn(ext, map<string, Value *>(), getLLVMType(ex->ret_type)));
     }
 
     for (auto &op : this->ops) {
@@ -277,7 +301,7 @@ void CodeGen::AST2IR() {
         string name = name_s.str();
         curr_fn_name = name;
 
-        cout << "Parsing operator " << name << endl;
+        cout << "Parsing operator " << fname << "::" << name << endl;
 
         FunctionType *tp = FunctionType::get(getLLVMType(op->ret_type), {lhs_type, rhs_type},false);
         Function *fnc = Function::Create(tp, Function::ExternalLinkage, name, module.get());
@@ -296,7 +320,7 @@ void CodeGen::AST2IR() {
         builder->CreateStore(&*(--fnc->arg_end()), alloc_rhs);
         fn_vars.emplace(op->rhs.first, alloc_rhs);
 
-        functions.emplace(name, LLVMFn(fnc, fn_vars, op->ret_type));
+        functions.emplace(name, LLVMFn(fnc, fn_vars, getLLVMType(op->ret_type)));
 
         for (auto &expr : op->body) {
             genExpr(move(expr));
@@ -304,7 +328,7 @@ void CodeGen::AST2IR() {
     }
 
     for (auto &fn : this->ast) {
-        cout << "Parsing " << fn->name << endl;
+        cout << "Parsing " << fname << "::" << fn->name << endl;
         curr_fn_name = fn->name;
 
         vector<Type *> fn_args;
@@ -327,7 +351,7 @@ void CodeGen::AST2IR() {
             fn_vars.emplace(fnc_arg->first, alloc);
         }
 
-        functions.emplace(fn->name, LLVMFn(fnc, fn_vars, fn->ret_type));
+        functions.emplace(fn->name, LLVMFn(fnc, fn_vars, getLLVMType(fn->ret_type)));
 
         for (auto &expr : fn->body) {
             genExpr(move(expr));

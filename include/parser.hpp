@@ -18,6 +18,7 @@ enum class TType {
 
 enum class Token {
     Operator,
+    Include,
     OperatorDef,
     None,
     Fnc,
@@ -42,6 +43,12 @@ enum class Token {
 class BaseAST {
     public:
         virtual ~BaseAST() {}
+};
+
+class IncludeAST : public BaseAST {
+    public:
+        IncludeAST(vector<string> mod) : modules(mod) {}
+        vector<string> modules;
 };
 
 class OperatorDefAST : public BaseAST {
@@ -178,6 +185,7 @@ class TokenStream {
         long index = 0;
         unique_ptr<stringstream> text;
         vector< pair<Token, string> > vec;
+        char lastchr = ' ';
 
         pair<Token, string> getTok();
 };
@@ -199,6 +207,10 @@ class ASTParser {
             return move(ops);
         }
 
+        vector<unique_ptr<IncludeAST>> get_includes() {
+            return move(incls);
+        }
+
     private:
         TokenStream tokens;
 
@@ -208,6 +220,7 @@ class ASTParser {
         vector<unique_ptr<FncDefAST>> fns;
         vector<unique_ptr<ExternFncAST>> exts;
         vector<unique_ptr<OperatorDefAST>> ops;
+        vector<unique_ptr<IncludeAST>> incls;
 
         Token getNextTok() {
             pair<Token, string> r = tokens.get();
@@ -217,6 +230,7 @@ class ASTParser {
 
         TType strToType(string s);
 
+        unique_ptr<IncludeAST> parseInclude();
         unique_ptr<FncDefAST> parseFncDef();
         unique_ptr<ExternFncAST> parseExternFnc();
         unique_ptr<OperatorDefAST> parseOperatorDef();
