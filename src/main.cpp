@@ -56,7 +56,7 @@ class CodeGen {
         CodeGen(string fnm) {
             fname = fnm.substr(0, fnm.length() - 3);
 
-            module = make_shared<Module>(fname, context); // .ff
+            module = std::make_unique<Module>(fname, context); // .ff
             builder = make_shared< IRBuilder<> >(context);
 
             ASTParser parser(getFileContent(fname + ".ff"));
@@ -67,16 +67,12 @@ class CodeGen {
             incls = parser.get_includes();
 
             AST2IR();
-
-            ofstream file(fname + ".ll");
-            raw_os_ostream outfile(file);
-
-            module->print(outfile, nullptr);
         }
 
+        unique_ptr<Module> module;
+        vector<unique_ptr<Module>> includes;
     private:
         string fname;
-        shared_ptr<Module> module;
 
         vector<unique_ptr<FncDefAST>> ast;
         vector<unique_ptr<ExternFncAST>> exts;
@@ -92,7 +88,7 @@ class CodeGen {
 
         map<string, LLVMFn> functions;
 
-        shared_ptr<IRBuilder<> > builder;
+        shared_ptr<IRBuilder<>> builder;
 
         string curr_fn_name;
 
@@ -271,6 +267,7 @@ void CodeGen::AST2IR() {
                 Function *ef = cast<Function>(module->getOrInsertFunction(o_fn.getName(), o_fn.getFunctionType()));
                 functions.emplace(o_fn.getName(), LLVMFn(ef, map<string, Value*>(), o_fn.getReturnType()));
             }
+            includes.push_back(move(m.module));
         }
     }
 
@@ -366,6 +363,19 @@ int main(int argc, char *argv[]) {
     }
 
     CodeGen codegen(argv[1]);
+
+    Linker l(*codegen.module);
+    for (auto &in : codegen.includes) {
+        l.linkInModule(move(in));
+    }
+
+    string fname = string(argv[1]);
+    fname = fname.substr(0, fname.length() - 3);
+
+    ofstream file(fname + ".ll");
+    raw_os_ostream outfile(file);
+
+    codegen.module->print(outfile, nullptr);
 
     return 0;
 }
