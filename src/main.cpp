@@ -1,7 +1,9 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/AssemblyAnnotationWriter.h"
+
+#include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/IPO/AlwaysInliner.h"
 
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
@@ -21,7 +23,8 @@
 using namespace std;
 using namespace llvm;
 
-LLVMContext context;
+static LLVMContext context;
+static bool compiledInEmmited = false;
 
 string getFileContent(const string pth) {
   ifstream file(pth);
@@ -93,6 +96,7 @@ class CodeGen {
         string curr_fn_name;
 
         void AST2IR();
+        void genCompiledIn();
         Value *genExpr(unique_ptr<BaseAST> obj);
         Type *getLLVMType(TType t);
 };
@@ -156,23 +160,6 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         }
     } else if (auto ca = dynamic_cast<FncCallAST *>(obj.get())) {
         try {
-            #define gen_basic(fname, fn)\
-                if (ca->name == (string("_basic_") + fname) && ca->args.size() == 2) { \
-                    Value *lhs = genExpr(move(ca->args[0]));\
-                    Value *rhs = genExpr(move(ca->args[1]));\
-                    return fn(lhs, rhs);\
-                }
-
-            gen_basic("iadd", builder->CreateAdd);
-            gen_basic("isub", builder->CreateSub);
-            gen_basic("imul", builder->CreateMul);
-            gen_basic("idiv", builder->CreateSDiv);
-
-            gen_basic("fadd", builder->CreateFAdd);
-            gen_basic("fsub", builder->CreateFSub);
-            gen_basic("fmul", builder->CreateFMul);
-            gen_basic("fdiv", builder->CreateFDiv);
-
             LLVMFn callee = functions.at(ca->name);
 
             if (callee.fn->getArgumentList().size() != ca->args.size())
@@ -259,6 +246,30 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
     throw runtime_error("strange expr");
 }
 
+void CodeGen::genCompiledIn() { // Always inline compiled in operators & optimize out unused
+    #define gen_basic(tp, fname, fn) {\
+        Function *fnc = Function::Create(tp, Function::LinkOnceAnyLinkage, fname, module.get());\
+        fnc->addFnAttr(Attribute::AlwaysInline);\
+        BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);\
+        builder->SetInsertPoint(enter);\
+        builder->CreateRet(fn(&*fnc->args().begin(), &*--fnc->args().end()));\
+        functions.emplace("_basic_iadd", LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));\
+    }
+    FunctionType *twoIntRetInt = FunctionType::get(getLLVMType(TType::Int), vector<Type *>{getLLVMType(TType::Int), getLLVMType(TType::Int)}, false);
+    gen_basic(twoIntRetInt, "_basic_iadd", builder->CreateAdd);
+    gen_basic(twoIntRetInt, "_basic_isub", builder->CreateSub);
+    gen_basic(twoIntRetInt, "_basic_imul", builder->CreateMul);
+    gen_basic(twoIntRetInt, "_basic_idiv", builder->CreateSDiv);
+
+    FunctionType *twoFloatRetFloat = FunctionType::get(getLLVMType(TType::Float), vector<Type *>{getLLVMType(TType::Float), getLLVMType(TType::Float)}, false);
+    gen_basic(twoFloatRetFloat, "_basic_fadd", builder->CreateFAdd);
+    gen_basic(twoFloatRetFloat, "_basic_fsub", builder->CreateFSub);
+    gen_basic(twoFloatRetFloat, "_basic_fmul", builder->CreateFMul);
+    gen_basic(twoFloatRetFloat, "_basic_fdiv", builder->CreateFDiv);
+
+    compiledInEmmited = true;
+}
+
 void CodeGen::AST2IR() {
     for (auto &in : this->incls) {
         for (string mod : in->modules) {
@@ -271,6 +282,9 @@ void CodeGen::AST2IR() {
         }
     }
 
+    // Only emit compied-in functions once
+    if (!compiledInEmmited) genCompiledIn();
+
     for (auto &ex : this->exts) {
         vector<Type *> ext_args;
         for (auto &ar : ex->args) {
@@ -280,7 +294,6 @@ void CodeGen::AST2IR() {
         FunctionType *extTy = FunctionType::get(getLLVMType(ex->ret_type), ext_args, false);
 
         Function *ext = cast<Function>(module->getOrInsertFunction(ex->name, extTy));
-
         functions.emplace(ex->name, LLVMFn(ext, map<string, Value *>(), getLLVMType(ex->ret_type)));
     }
 
@@ -368,6 +381,12 @@ int main(int argc, char *argv[]) {
     for (auto &in : codegen.includes) {
         l.linkInModule(move(in));
     }
+
+    PassManager<Module> pm;
+    AnalysisManager<Module> am;
+    pm.addPass(AlwaysInlinerPass());
+
+    pm.run(*codegen.module, am);
 
     string fname = string(argv[1]);
     fname = fname.substr(0, fname.length() - 3);
