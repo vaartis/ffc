@@ -32,19 +32,19 @@ pair<Token, string> TokenStream::getTok() {
             lastchr = text->get();
         }
         lastchr = text->get();
-        return make_pair(Token::StrLit, IdentStr);
+        return {Token::StrLit, IdentStr};
     }
 
-    static const char op_chars[] = "!~@#$%^&*-+\\/<>";
+    static vector<char> op_chars = {'!','~','@','#','$','%','^','&','*','-','+','\\','/','<','>','='};
 
-    if (any_of(begin(op_chars), end(op_chars), [&](char c) { return lastchr == c; })) {
+    if (any_of(begin(op_chars), --end(op_chars), [&](char c) { return lastchr == c; })) {
         IdentStr = lastchr;
         lastchr = text->get();
         while (any_of(begin(op_chars), end(op_chars), [&](char c) { return lastchr == c; })) {
             IdentStr += lastchr;
             lastchr = text->get();
         }
-        return make_pair(Token::Operator, IdentStr);
+        return {Token::Operator, IdentStr};
     }
 
     bool f = false;
@@ -55,6 +55,19 @@ pair<Token, string> TokenStream::getTok() {
             IdentStr += lastchr;
     }
 
+    if (lastchr == '=') {
+        IdentStr = lastchr;
+        lastchr = text->get();
+        if (lastchr == '=') {
+            IdentStr += lastchr;
+            lastchr = text->get();
+            return {Token::Operator, IdentStr};
+        } else {
+            lastchr = text->get();
+            return {Token::Eq, IdentStr};
+        }
+    }
+
     if (isdigit(lastchr)) {
         string numstr;
         bool f;
@@ -63,24 +76,25 @@ pair<Token, string> TokenStream::getTok() {
             if (lastchr == '.')
                 f = true;
             numstr += lastchr;
-            lastchr = this->text->get();
+            lastchr = text->get();
         } while (isdigit(lastchr) || lastchr == '.');
 
         if (!f)
-            return make_pair(Token::IntLit, numstr);
+            return {Token::IntLit, numstr};
         else
-            return make_pair(Token::FloatLit, numstr);
+            return {Token::FloatLit, numstr};
     }
 
     #define match(wh, to, type) if (wh == to)\
-            return make_pair(type, IdentStr);
+            return {type, IdentStr};
 
     #define match_char(to, type) if (lastchr == to) {\
         lastchr = text->get();\
-        IdentStr = string(1, to);\
-        return make_pair(type, IdentStr);\
+        IdentStr = to;\
+        return {type, IdentStr};\
     }
 
+    match(IdentStr, "==", Token::Operator);
     match(IdentStr, "fnc", Token::Fnc);
     match(IdentStr, "extern", Token::Extern);
     match(IdentStr, "operator", Token::OperatorDef);
@@ -107,7 +121,7 @@ pair<Token, string> TokenStream::getTok() {
         match_char(';', Token::Semicolon);
     }
 
-    return make_pair(Token::Ident, IdentStr);
+    return {Token::Ident, IdentStr};
 }
 
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
@@ -443,22 +457,33 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
         return parseOperator(move(lhs));
     }
 
-    if (currTok == Token::IntLit) {
-        return parseIntLiteral();
-    } else if (currTok == Token::FloatLit) {
-        return parseFloatLiteral();
-    } else if (currTok == Token::BoolLit) {
-        return parseBoolLiteral();
-    } else if (currTok == Token::StrLit) {
-        return parseStrLiteral();
-    } else if (currTok == Token::Ident) {
-        if (nxt == Token::OpP) {
-            return parseFncCall();
-        } else {
-            auto res = make_unique<IdentAST>(IdentStr);
-            getNextTok();
-            return move(res);
-        }
+    switch(currTok) { // Simple casese
+        case Token::IntLit:
+            return parseIntLiteral();
+        case Token::BoolLit:
+            return parseFloatLiteral();
+        case Token::StrLit:
+            return parseStrLiteral();
+        default: // Cases with variables
+            if (currTok == Token::OpP) {
+                getNextTok(); // eat (
+                auto res = parseExpr();
+                assert(currTok == Token::ClP);
+                getNextTok(); // eat )
+
+                if (currTok == Token::Operator) // FIXME
+                    return parseOperator(move(res));
+
+                return res;
+            } else if (currTok == Token::Ident) {
+                if (nxt == Token::OpP) {
+                    return parseFncCall();
+                } else {
+                    auto res = make_unique<IdentAST>(IdentStr);
+                    getNextTok();
+                    return move(res);
+                }
+            }
     }
 
     throw runtime_error("Unknown expr");

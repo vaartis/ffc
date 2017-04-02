@@ -17,14 +17,17 @@
 #include <algorithm>
 #include <sstream>
 #include <memory>
+#include <functional>
 
 #include "parser.hpp"
 
 using namespace std;
+using namespace std::placeholders;
+
 using namespace llvm;
 
 static LLVMContext context;
-static bool compiledInEmmited = false;
+static bool compiledInEmited = false;
 
 string getFileContent(const string pth) {
   ifstream file(pth);
@@ -246,28 +249,58 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
     throw runtime_error("strange expr");
 }
 
-void CodeGen::genCompiledIn() { // Always inline compiled in operators & optimize out unused
-    #define gen_basic(tp, fname, fn) {\
-        Function *fnc = Function::Create(tp, Function::LinkOnceAnyLinkage, fname, module.get());\
-        fnc->addFnAttr(Attribute::AlwaysInline);\
-        BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);\
-        builder->SetInsertPoint(enter);\
-        builder->CreateRet(fn(&*fnc->args().begin(), &*--fnc->args().end()));\
-        functions.emplace("_basic_iadd", LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));\
-    }
+void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unused
+    typedef tuple<FunctionType *, string, function<Value *(Value *, Value *)>> fnSpec;
+    auto genInLoop = [&](vector<fnSpec> fns) {
+        for (auto &p : fns) {
+            Function *fnc = Function::Create(get<0>(p), Function::LinkOnceAnyLinkage, get<1>(p), module.get());
+            fnc->addFnAttr(Attribute::AlwaysInline);
+
+            BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
+            builder->SetInsertPoint(enter);
+
+            builder->CreateRet(get<2>(p)(&*fnc->args().begin(), &*--fnc->args().end())); \
+            functions.emplace(get<1>(p), LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));
+        }
+    };
+
     FunctionType *twoIntRetInt = FunctionType::get(getLLVMType(TType::Int), vector<Type *>{getLLVMType(TType::Int), getLLVMType(TType::Int)}, false);
-    gen_basic(twoIntRetInt, "_basic_iadd", builder->CreateAdd);
-    gen_basic(twoIntRetInt, "_basic_isub", builder->CreateSub);
-    gen_basic(twoIntRetInt, "_basic_imul", builder->CreateMul);
-    gen_basic(twoIntRetInt, "_basic_idiv", builder->CreateSDiv);
-
+    FunctionType *twoIntRetBool = FunctionType::get(getLLVMType(TType::Bool), vector<Type *>{getLLVMType(TType::Int), getLLVMType(TType::Int)}, false);
     FunctionType *twoFloatRetFloat = FunctionType::get(getLLVMType(TType::Float), vector<Type *>{getLLVMType(TType::Float), getLLVMType(TType::Float)}, false);
-    gen_basic(twoFloatRetFloat, "_basic_fadd", builder->CreateFAdd);
-    gen_basic(twoFloatRetFloat, "_basic_fsub", builder->CreateFSub);
-    gen_basic(twoFloatRetFloat, "_basic_fmul", builder->CreateFMul);
-    gen_basic(twoFloatRetFloat, "_basic_fdiv", builder->CreateFDiv);
+    FunctionType *twoFloatRetBool = FunctionType::get(getLLVMType(TType::Bool), vector<Type *>{getLLVMType(TType::Float), getLLVMType(TType::Float)}, false);
 
-    compiledInEmmited = true;
+    genInLoop(vector<fnSpec>{
+            // Basic integer operations
+            make_tuple(twoIntRetInt, "_basic_iadd", bind(&IRBuilder<>::CreateAdd, builder, _1, _2, "", false, false)),
+            make_tuple(twoIntRetInt, "_basic_isub", bind(&IRBuilder<>::CreateSub, builder, _1, _2, "", false, false)),
+            make_tuple(twoIntRetInt, "_basic_imul", bind(&IRBuilder<>::CreateMul, builder, _1, _2, "", false, false)),
+            make_tuple(twoIntRetInt, "_basic_idiv", bind(&IRBuilder<>::CreateSDiv, builder, _1, _2, "", false)),
+            // Basic integer compare
+            make_tuple(twoIntRetBool, "_basic_ieq", bind(&IRBuilder<>::CreateICmpEQ, builder, _1, _2, "")),
+            make_tuple(twoIntRetBool, "_basic_ine", bind(&IRBuilder<>::CreateICmpNE, builder, _1, _2, "")),
+            make_tuple(twoIntRetBool, "_basic_igt", bind(&IRBuilder<>::CreateICmpSGT, builder, _1, _2, "")),
+            make_tuple(twoIntRetBool, "_basic_ilt", bind(&IRBuilder<>::CreateICmpSLT, builder, _1, _2, "")),
+            // Basic float operations
+            make_tuple(twoFloatRetFloat, "_basic_fadd", bind(&IRBuilder<>::CreateFAdd, builder, _1, _2, "", nullptr)),
+            make_tuple(twoFloatRetFloat, "_basic_fsub", bind(&IRBuilder<>::CreateFSub, builder, _1, _2, "", nullptr)),
+            make_tuple(twoFloatRetFloat, "_basic_fmul", bind(&IRBuilder<>::CreateFMul, builder, _1, _2, "", nullptr)),
+            make_tuple(twoFloatRetFloat, "_basic_fdiv", bind(&IRBuilder<>::CreateFDiv, builder, _1, _2, "", nullptr)),
+            // Basic float compare
+            make_tuple(twoFloatRetFloat, "_basic_feq", bind(&IRBuilder<>::CreateFCmpOEQ, builder, _1, _2, "", nullptr)),
+            make_tuple(twoFloatRetFloat, "_basic_fne", bind(&IRBuilder<>::CreateFCmpONE, builder, _1, _2, "", nullptr)),
+            make_tuple(twoFloatRetFloat, "_basic_fgt", bind(&IRBuilder<>::CreateFCmpOGT, builder, _1, _2, "", nullptr)),
+            make_tuple(twoFloatRetFloat, "_basic_flt", bind(&IRBuilder<>::CreateFCmpOLT, builder, _1, _2, "", nullptr)),
+    });
+
+
+    FunctionType *ftoi_t = FunctionType::get(getLLVMType(TType::Int), getLLVMType(TType::Float), false);
+    Function *ftoi = Function::Create(ftoi_t, Function::LinkOnceAnyLinkage, "floatToInt", module.get());
+    BasicBlock *enter = BasicBlock::Create(context, "entry", ftoi);
+    builder->SetInsertPoint(enter);
+    builder->CreateRet(builder->CreateFPToSI(&*ftoi->args().begin(), getLLVMType(TType::Int)));
+    functions.emplace("floatToInt", LLVMFn(ftoi, map<string, Value *>(), ftoi_t->getReturnType()));
+
+    compiledInEmited = true;
 }
 
 void CodeGen::AST2IR() {
@@ -283,7 +316,7 @@ void CodeGen::AST2IR() {
     }
 
     // Only emit compied-in functions once
-    if (!compiledInEmmited) genCompiledIn();
+    if (!compiledInEmited) genCompiledIn();
 
     for (auto &ex : this->exts) {
         vector<Type *> ext_args;
