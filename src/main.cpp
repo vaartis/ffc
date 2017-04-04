@@ -165,7 +165,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         try {
             LLVMFn callee = functions.at(ca->name);
 
-            if (callee.fn->getArgumentList().size() != ca->args.size())
+            if (callee.fn->arg_size() != ca->args.size())
                 throw runtime_error("Wrong number of args for function call: " + ca->name);
 
             vector<Value *> argms;
@@ -173,7 +173,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
                 Value *this_arg = genExpr(move(ca->args[i]));
 
                 int j = 0;
-                for (auto &ar : callee.fn->getArgumentList())
+                for (auto &ar : callee.fn->args())
                     if (j++ == i)
                         if (ar.getType() != this_arg->getType())
                             throw runtime_error("Wrong type in function call: " + ca->name);
@@ -250,48 +250,57 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 }
 
 void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unused
-    typedef tuple<FunctionType *, string, function<Value *(Value *, Value *)>> fnSpec;
-    auto genInLoop = [&](vector<fnSpec> fns) {
-        for (auto &p : fns) {
-            Function *fnc = Function::Create(get<0>(p), Function::LinkOnceAnyLinkage, get<1>(p), module.get());
-            fnc->addFnAttr(Attribute::AlwaysInline);
+    auto defOp = [&](tuple<string, TType, TType, TType, function<Value *(Value *, Value *)>> fncdef) {
+        string op = get<0>(fncdef);
+        Type *t1 = getLLVMType(get<1>(fncdef));
+        Type *t2 = getLLVMType(get<2>(fncdef));
+        Type *ret = getLLVMType(get<3>(fncdef));
 
-            BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
-            builder->SetInsertPoint(enter);
+        string useless;
+        raw_string_ostream s(useless);
+        t1->print(s);
+        s << op;
+        t2->print(s);
+        string name = s.str();
 
-            builder->CreateRet(get<2>(p)(&*fnc->args().begin(), &*--fnc->args().end())); \
-            functions.emplace(get<1>(p), LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));
-        }
+        Function *fnc = Function::Create(FunctionType::get(ret, vector{t1,t2}, false), Function::LinkOnceAnyLinkage, name, module.get());
+        fnc->addFnAttr(Attribute::AlwaysInline);
+
+        BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
+        builder->SetInsertPoint(enter);
+
+        builder->CreateRet(get<4>(fncdef)(&*fnc->arg_begin(), &*fnc->arg_end() - 1));
+        functions.emplace(name, LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));
     };
 
-    FunctionType *twoIntRetInt = FunctionType::get(getLLVMType(TType::Int), vector<Type *>{getLLVMType(TType::Int), getLLVMType(TType::Int)}, false);
-    FunctionType *twoIntRetBool = FunctionType::get(getLLVMType(TType::Bool), vector<Type *>{getLLVMType(TType::Int), getLLVMType(TType::Int)}, false);
-    FunctionType *twoFloatRetFloat = FunctionType::get(getLLVMType(TType::Float), vector<Type *>{getLLVMType(TType::Float), getLLVMType(TType::Float)}, false);
-    FunctionType *twoFloatRetBool = FunctionType::get(getLLVMType(TType::Bool), vector<Type *>{getLLVMType(TType::Float), getLLVMType(TType::Float)}, false);
+    #define genLambda(fn) [&](Value *v1, Value *v2){ return builder->fn(v1,v2); }
+    #define genTuple(c, t1, t2, ret, lmd) {c, TType::t1, TType::t2, TType::ret, genLambda(lmd)}
 
-    genInLoop(vector<fnSpec>{
-            // Basic integer operations
-            make_tuple(twoIntRetInt, "_basic_iadd", bind(&IRBuilder<>::CreateAdd, builder, _1, _2, "", false, false)),
-            make_tuple(twoIntRetInt, "_basic_isub", bind(&IRBuilder<>::CreateSub, builder, _1, _2, "", false, false)),
-            make_tuple(twoIntRetInt, "_basic_imul", bind(&IRBuilder<>::CreateMul, builder, _1, _2, "", false, false)),
-            make_tuple(twoIntRetInt, "_basic_idiv", bind(&IRBuilder<>::CreateSDiv, builder, _1, _2, "", false)),
-            // Basic integer compare
-            make_tuple(twoIntRetBool, "_basic_ieq", bind(&IRBuilder<>::CreateICmpEQ, builder, _1, _2, "")),
-            make_tuple(twoIntRetBool, "_basic_ine", bind(&IRBuilder<>::CreateICmpNE, builder, _1, _2, "")),
-            make_tuple(twoIntRetBool, "_basic_igt", bind(&IRBuilder<>::CreateICmpSGT, builder, _1, _2, "")),
-            make_tuple(twoIntRetBool, "_basic_ilt", bind(&IRBuilder<>::CreateICmpSLT, builder, _1, _2, "")),
-            // Basic float operations
-            make_tuple(twoFloatRetFloat, "_basic_fadd", bind(&IRBuilder<>::CreateFAdd, builder, _1, _2, "", nullptr)),
-            make_tuple(twoFloatRetFloat, "_basic_fsub", bind(&IRBuilder<>::CreateFSub, builder, _1, _2, "", nullptr)),
-            make_tuple(twoFloatRetFloat, "_basic_fmul", bind(&IRBuilder<>::CreateFMul, builder, _1, _2, "", nullptr)),
-            make_tuple(twoFloatRetFloat, "_basic_fdiv", bind(&IRBuilder<>::CreateFDiv, builder, _1, _2, "", nullptr)),
-            // Basic float compare
-            make_tuple(twoFloatRetFloat, "_basic_feq", bind(&IRBuilder<>::CreateFCmpOEQ, builder, _1, _2, "", nullptr)),
-            make_tuple(twoFloatRetFloat, "_basic_fne", bind(&IRBuilder<>::CreateFCmpONE, builder, _1, _2, "", nullptr)),
-            make_tuple(twoFloatRetFloat, "_basic_fgt", bind(&IRBuilder<>::CreateFCmpOGT, builder, _1, _2, "", nullptr)),
-            make_tuple(twoFloatRetFloat, "_basic_flt", bind(&IRBuilder<>::CreateFCmpOLT, builder, _1, _2, "", nullptr)),
-    });
+    vector<tuple<string, TType, TType, TType, function<Value *(Value*, Value*)>>> ops{
+        // Basic integer operators
+        genTuple("+", Int, Int, Int, CreateAdd),
+        genTuple("-", Int, Int, Int, CreateSub),
+        genTuple("*", Int, Int, Int, CreateMul),
+        genTuple("/", Int, Int, Int, CreateSDiv),
+        // Integer compare
+        genTuple("==", Int, Int, Bool, CreateICmpEQ),
+        genTuple("!=", Int, Int, Bool, CreateICmpNE),
+        genTuple(">", Int, Int, Bool, CreateICmpSGT),
+        genTuple("<", Int, Int, Bool, CreateICmpSLT),
+        // Basic float operators
+        genTuple("+", Float, Float, Float, CreateFAdd),
+        genTuple("-", Float, Float, Float, CreateFSub),
+        genTuple("*", Float, Float, Float, CreateFMul),
+        genTuple("/", Float, Float, Float, CreateFDiv),
+        // Float compare
+        genTuple("==", Float, Float, Bool, CreateFCmpOEQ),
+        genTuple("!=", Float, Float, Bool, CreateFCmpONE),
+        genTuple(">", Float, Float, Bool, CreateFCmpOGT),
+        genTuple("<", Float, Float, Bool, CreateFCmpOLT),
+    };
 
+    for (auto &o : ops)
+        defOp(o);
 
     FunctionType *ftoi_t = FunctionType::get(getLLVMType(TType::Int), getLLVMType(TType::Float), false);
     Function *ftoi = Function::Create(ftoi_t, Function::LinkOnceAnyLinkage, "floatToInt", module.get());
@@ -335,7 +344,7 @@ void CodeGen::AST2IR() {
         Type *rhs_type = getLLVMType(op->rhs.second);
 
         string useless;
-        raw_string_ostream name_s(useless);;
+        raw_string_ostream name_s(useless);
 
         lhs_type->print(name_s);
         name_s << op->name;
@@ -360,7 +369,7 @@ void CodeGen::AST2IR() {
         fn_vars.emplace(op->lhs.first, alloc_lhs);
 
         Value *alloc_rhs = builder->CreateAlloca(rhs_type, nullptr, op->rhs.first);
-        builder->CreateStore(&*(--fnc->arg_end()), alloc_rhs);
+        builder->CreateStore(fnc->arg_end() - 1, alloc_rhs);
         fn_vars.emplace(op->rhs.first, alloc_rhs);
 
         functions.emplace(name, LLVMFn(fnc, fn_vars, getLLVMType(op->ret_type)));

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
-project(FF CXX)
 set(CMAKE_CXX_COMPILER clang++)
+project(FF CXX)
 
 file(GLOB ff_SRC "src/*.cpp")
 
