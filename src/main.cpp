@@ -107,7 +107,7 @@ class CodeGen {
 Type *CodeGen::getLLVMType(TType t) {
         switch (t) {
             case TType::Int:
-                return builder->getInt32Ty();
+                return builder->getInt64Ty();
             case TType::Void:
                 return builder->getVoidTy();
             case TType::Float:

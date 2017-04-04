@@ -70,7 +70,7 @@ pair<Token, string> TokenStream::getTok() {
 
     if (isdigit(lastchr)) {
         string numstr;
-        bool f;
+        bool f = false;
 
         do {
             if (lastchr == '.')
