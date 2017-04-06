@@ -14,6 +14,8 @@ using namespace std;
 TokenStream::TokenStream(string s) {
     text = make_unique<stringstream>(s);
 
+    types = { "int", "float", "bool", "str" };
+
     while (!text->eof()) {
         vec.push_back(getTok());
     }
@@ -99,11 +101,11 @@ pair<Token, string> TokenStream::getTok() {
     match(IdentStr, "extern", Token::Extern);
     match(IdentStr, "operator", Token::OperatorDef);
     match(IdentStr, "include", Token::Include);
-    
-    match(IdentStr, "int", Token::Type);
-    match(IdentStr, "float", Token::Type);
-    match(IdentStr, "bool", Token::Type);
-    match(IdentStr, "str", Token::Type);
+    match(IdentStr, "type", Token::TypeDef);
+
+    if (any_of(begin(types), end(types), [&](string s) { return s == IdentStr; })) {
+        return {Token::Type, IdentStr};
+    }
 
     match(IdentStr, "true", Token::BoolLit);
     match(IdentStr, "false", Token::BoolLit);
@@ -119,28 +121,74 @@ pair<Token, string> TokenStream::getTok() {
         match_char('}', Token::ClCB);
         match_char('=', Token::Eq);
         match_char(';', Token::Semicolon);
+        match_char('.', Token::Dot);
     }
 
     return {Token::Ident, IdentStr};
 }
 
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
+    types = tokens.getTypes();
     while (true) {
         try {
-            if (currTok == Token::Fnc) {
-                fns.push_back(parseFncDef());
-            } else if (currTok == Token::Extern) {
-                exts.push_back(parseExternFnc());
-            } else if (currTok == Token::OperatorDef) {
-                ops.push_back(parseOperatorDef());
-            } else if(currTok == Token::Include) {
-                incls.push_back(parseInclude());
-            }
             getNextTok();
+            switch(currTok) {
+                case Token::Fnc:
+                    functions.push_back(parseFncDef());
+                    break;
+                case Token::Extern:
+                    ext_functions.push_back(parseExternFnc());
+                    break;
+                case Token::Include:
+                    includes.push_back(parseInclude());
+                    break;
+                case Token::TypeDef:
+                    parseTypeDef();
+                default:
+                    break;
+            }
         } catch (TokenStream::EOFException) {
             break;
         }
     }
+}
+
+bool ASTParser::isType(string s) {
+    if (any_of(begin(types), end(types), [&](string c) { return c == s; })) {
+        return true;
+    }
+
+    if (any_of(begin(typedefs), end(typedefs), [&](pair<const string, shared_ptr<TypeDefAST>> c) { return c.first == s; })) {
+        return true;
+    }
+
+    return false;
+}
+
+#define if_type(t, s) (t == Token::Type || isType(s))
+#define if_ident(t, s) (t == Token::Ident && !isType(s))
+
+void ASTParser::parseTypeDef() {
+    getNextTok(); // eat type token
+    assert(if_ident(currTok, IdentStr));
+    string name = IdentStr;
+    getNextTok();
+    assert(currTok == Token::OpCB);
+    getNextTok();
+
+    vector<pair<string, TType>> fields;
+    while (currTok != Token::ClCB) {
+        assert(isType(IdentStr));
+        TType tp = strToType(IdentStr);
+        getNextTok();
+        assert(if_ident(currTok, IdentStr));
+        string name = IdentStr;
+        getNextTok();
+        assert(currTok == Token::Semicolon);
+        getNextTok(); // eat ;
+        fields.push_back({name, tp});
+    }
+    typedefs.emplace(name, make_shared<TypeDefAST>(name, fields));
 }
 
 /// include = include <string literal> <string literal>*
@@ -187,21 +235,23 @@ unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
 
 TType ASTParser::strToType(string s) {
     if (s == "int")
-        return TType::Int;
+        return _TType::Int;
     else if (s == "float")
-        return TType::Float;
+        return _TType::Float;
     else if (s == "bool")
-        return TType::Bool;
+        return _TType::Bool;
     else if (s == "str")
-        return TType::Str;
+        return _TType::Str;
+    else if (isType(s))
+        return s; // custom type
     else
-        throw runtime_error("Unknown type");
+        throw runtime_error("Unknown type:" + s);
 }
 
 unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     getNextTok(); // eat extern
 
-    assert(currTok == Token::Ident);
+    assert(if_ident(currTok, IdentStr));
 
     string name = IdentStr;
 
@@ -214,7 +264,7 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     vector<TType> args;
 
     while (currTok != Token::ClP) {
-        assert(currTok == Token::Type);
+        assert(if_type(currTok, IdentStr));
 
         TType t = strToType(IdentStr);
         args.push_back(t);
@@ -224,9 +274,9 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
 
     getNextTok(); // eat )
 
-    TType ret_type = TType::Void;
+    TType ret_type = _TType::Void;
 
-    if (currTok == Token::Type) {
+    if (if_type(currTok, IdentStr)) {
         ret_type = strToType(IdentStr);
         getNextTok(); // eat type
     }
@@ -253,24 +303,24 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     assert(currTok == Token::OpP);
 
     getNextTok();
-    assert(currTok == Token::Type);
+    assert(if_type(currTok, IdentStr));
     lhs.second = strToType(IdentStr);
     getNextTok();
-    assert(currTok == Token::Ident);
+    assert(if_ident(currTok, IdentStr));
     lhs.first = IdentStr;
 
     getNextTok();
-    assert(currTok == Token::Type);
+    assert(if_type(currTok, IdentStr));
     rhs.second = strToType(IdentStr);
     getNextTok();
-    assert(currTok == Token::Ident);
+    assert(if_ident(currTok, IdentStr));
     rhs.first = IdentStr;
     getNextTok();
 
     assert(currTok == Token::ClP);
     getNextTok(); // eat )
 
-    assert(currTok == Token::Type);
+    assert(if_type(currTok, IdentStr));
     TType ret_type = strToType(IdentStr);
     getNextTok(); // eat type
 
@@ -301,7 +351,7 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
 unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     getNextTok(); // eat fnc
 
-    assert(currTok == Token::Ident);
+    assert(if_ident(currTok, IdentStr));
 
     string name = IdentStr;
 
@@ -313,13 +363,11 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
 
     map <string, TType> args;
     while (currTok != Token::ClP) {
-        assert(currTok == Token::Type);
-
         TType t = strToType(IdentStr);
 
         getNextTok();
 
-        assert (currTok == Token::Ident);
+        assert(if_ident(currTok, IdentStr));
 
         args.insert(make_pair(IdentStr, t));
 
@@ -327,9 +375,9 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     }
     getNextTok(); // eat )
 
-    TType ret_type = TType::Void;
+    TType ret_type = _TType::Void;
 
-    if (currTok == Token::Type) {
+    if (if_type(currTok, IdentStr)) {
         ret_type = strToType(IdentStr);
         getNextTok(); // eat type
     }
@@ -378,9 +426,9 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
 
     // var ::= <type>* <literal> ( '=' <expr> )* ';'
 
-    if ((cTok == Token::Type && nTok == Token::Ident) || (cTok == Token::Ident && nTok == Token::Eq)) {
+    if ((if_type(cTok, maybe_tmp) && if_ident(nTok, maybe_tmp2)) || (if_ident(cTok, maybe_tmp) && nTok == Token::Eq)) {
         return parseVar();
-    } else if (cTok == Token::Ident && nTok == Token::OpP) {
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
         return parseFncCall();
     }
 
@@ -475,30 +523,64 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
                     return parseOperator(move(res));
 
                 return res;
-            } else if (currTok == Token::Ident) {
+            } else if (if_ident(currTok, IdentStr)) {
                 if (nxt == Token::OpP) {
                     return parseFncCall();
+                } else if (nxt == Token::Dot) {
+                    return parseTypeFieldLoad();
                 } else {
                     auto res = make_unique<IdentAST>(IdentStr);
                     getNextTok();
                     return move(res);
                 }
+            } else if (if_type(currTok, IdentStr)) {
+                return parseType();
             }
     }
 
     throw runtime_error("Unknown expr");
 }
 
+unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad() {
+    string st_name = IdentStr;
+    assert(!if_type(currTok, st_name));
+    getNextTok();
+    assert(currTok == Token::Dot); 
+    getNextTok(); // eat dor
+    string f_name = IdentStr;
+    getNextTok();
+    return make_unique<TypeFieldLoadAST>(st_name, f_name);
+}
+
+unique_ptr<BaseAST> ASTParser::parseType() {
+    string name = IdentStr;
+    getNextTok();
+    assert(currTok == Token::OpCB);
+    getNextTok();
+    map<string, unique_ptr<BaseAST>> fields;
+    while (currTok != Token::ClCB) {
+        assert(if_ident(currTok, IdentStr));
+        string f_name = IdentStr;
+        getNextTok();
+        assert(currTok == Token::Eq);
+        getNextTok(); // eat =
+        unique_ptr<BaseAST> f_val = parseExpr();
+        fields.emplace(f_name, move(f_val));
+    }
+    getNextTok();
+    return make_unique<TypeAST>(name, move(fields));  
+}
+
 // var ::= <type>* <literal> ( '=' <expr> )* ';'
 unique_ptr<BaseAST> ASTParser::parseVar() {
-    if (currTok == Token::Type) { // Varible creation
+    if (if_type(currTok, IdentStr)) { // Varible creation
         string type = IdentStr;
 
         TType t = strToType(type);
         
         getNextTok(); // eat type
 
-        assert(currTok == Token::Ident);
+        assert(if_ident(currTok, IdentStr));
 
         string name = IdentStr;
 
@@ -511,7 +593,7 @@ unique_ptr<BaseAST> ASTParser::parseVar() {
 
             return make_unique<DeclAST>(name, t, parseExpr());
         }
-    } else if (currTok == Token::Ident) { // varible assignment
+    } else if (if_ident(currTok, IdentStr)) { // varible assignment
         string name = IdentStr;
 
         getNextTok(); // eat =
@@ -535,7 +617,7 @@ unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {
 unique_ptr<BaseAST> ASTParser::parseFncCall() {
     vector< unique_ptr<BaseAST> > args;
 
-    assert(currTok == Token::Ident);
+    assert(if_ident(currTok, IdentStr));
 
     string name = IdentStr;
 

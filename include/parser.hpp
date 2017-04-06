@@ -1,5 +1,7 @@
 #pragma once
 
+#include <variant>
+
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -8,13 +10,15 @@ using std::pair;
 using std::exception;
 using std::stringstream;
 
-enum class TType {
+enum class _TType {
     Int,
     Float,
     Bool,
     Str,
     Void
 };
+
+typedef std::variant<_TType, string> TType;
 
 enum class Token {
     Operator,
@@ -33,8 +37,10 @@ enum class Token {
     OpCB,
     ClCB,
     Semicolon,
+    Dot,
     Eq,
     Type,
+    TypeDef,
     Ret,
     If,
     Else
@@ -43,6 +49,27 @@ enum class Token {
 class BaseAST {
     public:
         virtual ~BaseAST() {}
+};
+
+class TypeDefAST : public BaseAST {
+    public:
+        TypeDefAST(string nm, vector<pair<string, TType>> vals) : name(nm), fields(vals) {}
+        string name;
+        vector<pair<string, TType>> fields;
+};
+
+class TypeFieldLoadAST : public BaseAST {
+    public:
+        TypeFieldLoadAST(string st_n, string f_n) : struct_name(st_n), field_name(f_n) {}
+        string struct_name;
+        string field_name;
+};
+
+class TypeAST : public BaseAST {
+    public:
+    TypeAST(string nm, map<string, unique_ptr<BaseAST>> flds) : name(nm), fields(move(flds)) {}
+    string name;
+    map<string, unique_ptr<BaseAST>> fields;
 };
 
 class IncludeAST : public BaseAST {
@@ -181,11 +208,17 @@ class TokenStream {
         pair<Token, string> peek() {
             return vec[index];
         }
+
+        vector< string> getTypes() {
+            return types;
+        }
+    
     private:
         long index = 0;
         unique_ptr<stringstream> text;
         vector< pair<Token, string> > vec;
         char lastchr = ' ';
+        vector<string> types;
 
         pair<Token, string> getTok();
 };
@@ -195,51 +228,48 @@ class ASTParser {
         ASTParser(string s);
         ~ASTParser() {}
 
-        vector<unique_ptr<FncDefAST>> get_functions() {
-            return move(fns);
-        }
-
-        vector<unique_ptr<ExternFncAST>> get_ext_functions() {
-            return move(exts);
-        }
-
-        vector<unique_ptr<OperatorDefAST>> get_operators() {
-            return move(ops);
-        }
-
-        vector<unique_ptr<IncludeAST>> get_includes() {
-            return move(incls);
-        }
+        #define gen_getter(ty, nm) vector<unique_ptr<ty>> get_##nm() { return move(nm); }
+        gen_getter(FncDefAST, functions);
+        gen_getter(ExternFncAST, ext_functions);
+        gen_getter(OperatorDefAST, operators);
+        gen_getter(IncludeAST, includes);
+        map<string, std::shared_ptr<TypeDefAST>> get_typedefs() {return typedefs; }
 
     private:
         TokenStream tokens;
 
+    vector<string> types;
         string IdentStr;
         Token currTok = Token::None;
 
-        vector<unique_ptr<FncDefAST>> fns;
-        vector<unique_ptr<ExternFncAST>> exts;
-        vector<unique_ptr<OperatorDefAST>> ops;
-        vector<unique_ptr<IncludeAST>> incls;
+        vector<unique_ptr<FncDefAST>> functions;
+        vector<unique_ptr<ExternFncAST>> ext_functions;
+        vector<unique_ptr<OperatorDefAST>> operators;
+        vector<unique_ptr<IncludeAST>> includes;
+        map<string, std::shared_ptr<TypeDefAST>> typedefs;
 
-        Token getNextTok() {
+        Token getNextTok() { 
             pair<Token, string> r = tokens.get();
             IdentStr = r.second;
             return currTok = r.first;
         }
 
+        bool isType(string);
         TType strToType(string s);
 
         unique_ptr<IncludeAST> parseInclude();
         unique_ptr<FncDefAST> parseFncDef();
         unique_ptr<ExternFncAST> parseExternFnc();
         unique_ptr<OperatorDefAST> parseOperatorDef();
+        void parseTypeDef();
 
         unique_ptr<BaseAST> parseIntLiteral();
         unique_ptr<BaseAST> parseFloatLiteral();
         unique_ptr<BaseAST> parseBoolLiteral();
         unique_ptr<BaseAST> parseStrLiteral();
 
+        unique_ptr<BaseAST> parseTypeFieldLoad();
+        unique_ptr<BaseAST> parseType();
         unique_ptr<BaseAST> parseStmt();
         unique_ptr<BaseAST> parseFncCall();
         unique_ptr<BaseAST> parseVar();

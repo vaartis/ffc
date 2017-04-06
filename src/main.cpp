@@ -18,11 +18,11 @@
 #include <sstream>
 #include <memory>
 #include <functional>
+#include <variant>
 
 #include "parser.hpp"
 
 using namespace std;
-using namespace std::placeholders;
 
 using namespace llvm;
 
@@ -71,6 +71,7 @@ class CodeGen {
             exts = parser.get_ext_functions();
             ops = parser.get_operators();
             incls = parser.get_includes();
+            typedefs = parser.get_typedefs();
 
             AST2IR();
         }
@@ -84,6 +85,7 @@ class CodeGen {
         vector<unique_ptr<ExternFncAST>> exts;
         vector<unique_ptr<OperatorDefAST>> ops;
         vector<unique_ptr<IncludeAST>> incls;
+        map<string, shared_ptr<TypeDefAST>> typedefs;
 
         struct LLVMFn {
             LLVMFn(Function *f, map<string, Value *> vars, Type *tp) : fn(f), variables(vars), ret_type(tp) {}
@@ -92,7 +94,14 @@ class CodeGen {
             Type *ret_type;
         };
 
+        struct LLVMStruct {
+            LLVMStruct(vector<pair<string, Type *>> flds, StructType *tp) : fields(flds), type(tp) {}
+            StructType *type;
+            vector<pair<string, Type *>> fields;
+        };
+
         map<string, LLVMFn> functions;
+        map<string, LLVMStruct> struct_types;
 
         shared_ptr<IRBuilder<>> builder;
 
@@ -101,22 +110,37 @@ class CodeGen {
         void AST2IR();
         void genCompiledIn();
         Value *genExpr(unique_ptr<BaseAST> obj);
-        Type *getLLVMType(TType t);
+    
+        Type *getLLVMType(TType t); // build-in
+        Type *getLLVMType(string s); // custom
 };
 
 Type *CodeGen::getLLVMType(TType t) {
-        switch (t) {
-            case TType::Int:
-                return builder->getInt64Ty();
-            case TType::Void:
-                return builder->getVoidTy();
-            case TType::Float:
-                return builder->getFloatTy();
-            case TType::Bool:
-                return builder->getInt1Ty();
-            case TType::Str:
-                return builder->getInt8PtrTy();
-        }
+    return visit([&](auto arg) -> Type * {
+              using T = decltype(arg);
+              if constexpr (is_same_v<_TType, T>) {
+                  switch (arg) {
+                      case _TType::Int:
+                          return builder->getInt64Ty();
+                      case _TType::Void:
+                          return builder->getVoidTy();
+                      case _TType::Float:
+                          return builder->getFloatTy();
+                      case _TType::Bool:
+                          return builder->getInt1Ty();
+                      case _TType::Str:
+                          return builder->getInt8PtrTy();
+                      }
+              } else if constexpr (is_same_v<string, T>) {
+                  try {
+                      return struct_types.at(arg).type;
+                  } catch (out_of_range) {
+                      throw runtime_error("Unknown type: " + arg);
+                  }
+              } else {
+                  throw runtime_error("Bug");
+              }
+          }, t);
 }
 
 Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
@@ -129,12 +153,13 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
         if (decl->value != nullptr) {
             Value *v = genExpr(move(decl->value));
-
+            
             if (t != v->getType())
                 throw runtime_error(string("Invalid type assigned to ") + decl->name);
 
             return builder->CreateStore(v, alloc, false);
         }
+        return alloc;
     } else if (auto ass = dynamic_cast<AssAST *>(obj.get())) {
         try {
             auto var = functions.at(curr_fn_name).variables.at(ass->name);
@@ -157,7 +182,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
             return builder->CreateRet(retxpr);
         } else {
-            if (functions.at(curr_fn_name).ret_type != FunctionType::get(getLLVMType(TType::Void), false))
+            if (functions.at(curr_fn_name).ret_type != FunctionType::get(getLLVMType(_TType::Void), false))
                 throw runtime_error("Can't return nothing from a non-void function");
             return builder->CreateRetVoid();
         }
@@ -204,17 +229,77 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         } catch(out_of_range) {
             throw runtime_error("Operator not defined: " + name);
         }
+    } else if (auto st = dynamic_cast<TypeAST *>(obj.get())) {
+        try {
+            LLVMStruct s = struct_types.at(st->name);
+
+            Value *tmp_struct = builder->CreateAlloca(s.type); // should be opimized out
+
+            for (auto &field : st->fields) {
+                string f_name = field.first;
+                Value *f_val = genExpr(move(field.second));
+
+                auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> val){
+                                                                          if (val.first == f_name)
+                                                                              return true;
+                                                                          else
+                                                                              return false;
+                                                                      });
+
+                if (index_i == s.fields.end())
+                    throw runtime_error("Unknown field: " + f_name);
+                
+                unsigned int index = distance(s.fields.begin(), index_i);
+
+                Value * this_field = builder->CreateStructGEP(s.type, tmp_struct, index);
+                builder->CreateStore(f_val, this_field);
+            }
+            return builder->CreateLoad(tmp_struct);
+            
+        } catch (out_of_range) {
+            throw runtime_error("Unknown custom type: " + st->name);
+        }
+    } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
+        try {
+            auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
+
+            string type_str;
+            raw_string_ostream rso(type_str);
+            val->getType()->print(rso);
+            string type_name = rso.str();
+            type_name = type_name.substr(1, type_name.length() - 2);
+            
+            LLVMStruct s = struct_types.at(type_name);
+
+            auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
+                                                                         if (v.first == st->field_name)
+                                                                             return true;
+                                                                         else
+                                                                             return false;
+                                                                     });
+
+                if (index_i == s.fields.end())
+                    throw runtime_error("Unknown field: " + st->field_name);
+                
+                unsigned int index = distance(s.fields.begin(), index_i);
+
+                Value *this_field = builder->CreateStructGEP(s.type, val, index);
+                return builder->CreateLoad(this_field);
+            
+        } catch(out_of_range) {
+            throw runtime_error(string("Undefined varible: ") + st->struct_name);
+        }
     } else if (auto o = dynamic_cast<IntAST *>(obj.get())) {
-        return ConstantInt::get(getLLVMType(TType::Int), o->value);
+        return ConstantInt::get(getLLVMType(_TType::Int), o->value);
     } else if (auto f = dynamic_cast<FloatAST *>(obj.get())) {
-        return ConstantFP::get(getLLVMType(TType::Float), f->value);
+        return ConstantFP::get(getLLVMType(_TType::Float), f->value);
     } else if (auto b = dynamic_cast<BoolAST *>(obj.get())) {
-        return ConstantInt::get(getLLVMType(TType::Bool), b->value);
+        return ConstantInt::get(getLLVMType(_TType::Bool), b->value);
     } else if (auto s = dynamic_cast<StrAST *>(obj.get())) {
         return builder->CreateGlobalStringPtr(s->value);
     } else if (auto v = dynamic_cast<IdentAST *>(obj.get())) {
         try {
-            auto val = functions.at(curr_fn_name).variables.at(v->value);;
+            auto val = functions.at(curr_fn_name).variables.at(v->value);
             return builder->CreateLoad(val);
         } catch(out_of_range) {
             throw runtime_error(string("Undefined varible: ") + v->value);
@@ -273,8 +358,7 @@ void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unus
         functions.emplace(name, LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));
     };
 
-    #define genLambda(fn) [&](Value *v1, Value *v2){ return builder->fn(v1,v2); }
-    #define genTuple(c, t1, t2, ret, lmd) {c, TType::t1, TType::t2, TType::ret, genLambda(lmd)}
+    #define genTuple(c, t1, t2, ret, lmd) {c, _TType::t1, _TType::t2, _TType::ret, [&](Value *v1, Value *v2){ return builder->lmd(v1,v2);}}
 
     vector<tuple<string, TType, TType, TType, function<Value *(Value*, Value*)>>> ops{
         // Basic integer operators
@@ -302,11 +386,11 @@ void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unus
     for (auto &o : ops)
         defOp(o);
 
-    FunctionType *ftoi_t = FunctionType::get(getLLVMType(TType::Int), getLLVMType(TType::Float), false);
+    FunctionType *ftoi_t = FunctionType::get(getLLVMType(_TType::Int), getLLVMType(_TType::Float), false);
     Function *ftoi = Function::Create(ftoi_t, Function::LinkOnceAnyLinkage, "floatToInt", module.get());
     BasicBlock *enter = BasicBlock::Create(context, "entry", ftoi);
     builder->SetInsertPoint(enter);
-    builder->CreateRet(builder->CreateFPToSI(&*ftoi->args().begin(), getLLVMType(TType::Int)));
+    builder->CreateRet(builder->CreateFPToSI(&*ftoi->args().begin(), getLLVMType(_TType::Int)));
     functions.emplace("floatToInt", LLVMFn(ftoi, map<string, Value *>(), ftoi_t->getReturnType()));
 
     compiledInEmited = true;
@@ -353,7 +437,7 @@ void CodeGen::AST2IR() {
         string name = name_s.str();
         curr_fn_name = name;
 
-        cout << "Parsing operator " << fname << "::" << name << endl;
+        cout << "Emiting operator " << fname << "::" << name << endl;
 
         FunctionType *tp = FunctionType::get(getLLVMType(op->ret_type), {lhs_type, rhs_type},false);
         Function *fnc = Function::Create(tp, Function::ExternalLinkage, name, module.get());
@@ -379,8 +463,25 @@ void CodeGen::AST2IR() {
         }
     }
 
+    for (auto &st : this->typedefs) {
+        cout << "Emiting type " << fname << "::" << st.first << endl;
+
+        auto strct = st.second;
+
+        vector<pair<string, Type *>> els;
+        transform(strct->fields.begin(), strct->fields.end(), back_inserter(els),
+                  [&](pair<string, TType> t) -> pair<string, Type *> { return {t.first, getLLVMType(t.second)}; });
+        vector<Type *> decl_els;
+        transform(els.begin(), els.end(), back_inserter(decl_els),
+                  [&](pair<string, Type *> t) { return t.second; });
+        
+        StructType *type = StructType::create(decl_els, st.first);
+
+        struct_types.emplace(st.first, LLVMStruct(els, type));
+    }
+
     for (auto &fn : this->ast) {
-        cout << "Parsing " << fname << "::" << fn->name << endl;
+        cout << "Emiting " << fname << "::" << fn->name << endl;
         curr_fn_name = fn->name;
 
         vector<Type *> fn_args;
