@@ -20,7 +20,7 @@
 #include <functional>
 #include <variant>
 
-#include "parser.hpp"
+#include "ASTParser.hpp"
 
 using namespace std;
 

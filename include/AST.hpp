@@ -1,50 +1,14 @@
 #pragma once
 
-#include <variant>
+#include <string>
+#include <map>
+#include <vector>
 
 using std::string;
 using std::unique_ptr;
-using std::vector;
 using std::map;
+using std::vector;
 using std::pair;
-using std::exception;
-using std::stringstream;
-
-enum class _TType {
-    Int,
-    Float,
-    Bool,
-    Str,
-    Void
-};
-
-typedef std::variant<_TType, string> TType;
-
-enum class Token {
-    Operator,
-    Include,
-    OperatorDef,
-    None,
-    Fnc,
-    Extern,
-    Ident,
-    IntLit,
-    FloatLit,
-    BoolLit,
-    StrLit,
-    OpP,
-    ClP,
-    OpCB,
-    ClCB,
-    Semicolon,
-    Dot,
-    Eq,
-    Type,
-    TypeDef,
-    Ret,
-    If,
-    Else
-};
 
 class BaseAST {
     public:
@@ -187,94 +151,4 @@ class RetAST : public BaseAST {
     public:
         RetAST(unique_ptr<BaseAST> v) : value(move(v)) {}
         unique_ptr<BaseAST> value;
-};
-
-class TokenStream {
-    public:
-        TokenStream(string s);
-
-        struct EOFException : exception {};
-
-        long length() {
-            return vec.size();
-        }
-
-        pair<Token, string> get() {
-            if (index++ >= vec.size())
-                throw TokenStream::EOFException();
-            return vec[index - 1];
-        }
-
-        pair<Token, string> peek() {
-            return vec[index];
-        }
-
-        vector< string> getTypes() {
-            return types;
-        }
-    
-    private:
-        long index = 0;
-        unique_ptr<stringstream> text;
-        vector< pair<Token, string> > vec;
-        char lastchr = ' ';
-        vector<string> types;
-
-        pair<Token, string> getTok();
-};
-
-class ASTParser {
-    public:
-        ASTParser(string s);
-        ~ASTParser() {}
-
-        #define gen_getter(ty, nm) vector<unique_ptr<ty>> get_##nm() { return move(nm); }
-        gen_getter(FncDefAST, functions);
-        gen_getter(ExternFncAST, ext_functions);
-        gen_getter(OperatorDefAST, operators);
-        gen_getter(IncludeAST, includes);
-        map<string, std::shared_ptr<TypeDefAST>> get_typedefs() {return typedefs; }
-
-    private:
-        TokenStream tokens;
-
-    vector<string> types;
-        string IdentStr;
-        Token currTok = Token::None;
-
-        vector<unique_ptr<FncDefAST>> functions;
-        vector<unique_ptr<ExternFncAST>> ext_functions;
-        vector<unique_ptr<OperatorDefAST>> operators;
-        vector<unique_ptr<IncludeAST>> includes;
-        map<string, std::shared_ptr<TypeDefAST>> typedefs;
-
-        Token getNextTok() { 
-            pair<Token, string> r = tokens.get();
-            IdentStr = r.second;
-            return currTok = r.first;
-        }
-
-        bool isType(string);
-        TType strToType(string s);
-
-        unique_ptr<IncludeAST> parseInclude();
-        unique_ptr<FncDefAST> parseFncDef();
-        unique_ptr<ExternFncAST> parseExternFnc();
-        unique_ptr<OperatorDefAST> parseOperatorDef();
-        void parseTypeDef();
-
-        unique_ptr<BaseAST> parseIntLiteral();
-        unique_ptr<BaseAST> parseFloatLiteral();
-        unique_ptr<BaseAST> parseBoolLiteral();
-        unique_ptr<BaseAST> parseStrLiteral();
-
-        unique_ptr<BaseAST> parseTypeFieldLoad();
-        unique_ptr<BaseAST> parseType();
-        unique_ptr<BaseAST> parseStmt();
-        unique_ptr<BaseAST> parseFncCall();
-        unique_ptr<BaseAST> parseVar();
-        unique_ptr<BaseAST> parseExpr();
-        unique_ptr<BaseAST> parseRet();
-        unique_ptr<BaseAST> parseIf();
-        unique_ptr<BaseAST> parseOperator(unique_ptr<BaseAST> lhs);
 };
