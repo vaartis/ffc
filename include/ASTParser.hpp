@@ -61,6 +61,7 @@ class ASTParser {
         unique_ptr<BaseAST> parseBoolLiteral();
         unique_ptr<BaseAST> parseStrLiteral();
 
+        unique_ptr<BaseAST> parseTypeFieldStore();
         unique_ptr<BaseAST> parseTypeFieldLoad();
         unique_ptr<BaseAST> parseType();
         unique_ptr<BaseAST> parseStmt();

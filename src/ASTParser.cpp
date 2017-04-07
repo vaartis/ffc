@@ -12,7 +12,7 @@
 
 using namespace std;
 
-Token ASTParser::getNextTok() { 
+Token ASTParser::getNextTok() {
     pair<Token, string> r = tokens.get();
     IdentStr = r.second;
     return currTok = r.first;
@@ -321,6 +321,8 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
         return parseVar();
     } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
         return parseFncCall();
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
+        return parseTypeFieldStore();
     }
 
     switch (currTok) {
@@ -367,9 +369,9 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
 
     if (currTok == Token::Else) {
         getNextTok(); // eat else
-        
+
         assert(currTok == Token::OpCB);
-        
+
         getNextTok(); // eat {
 
         else_body.push_back(parseStmt());
@@ -432,11 +434,25 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
     throw runtime_error("Unknown expr");
 }
 
+unique_ptr<BaseAST> ASTParser::parseTypeFieldStore() {
+    string st_name = IdentStr;
+    assert(!if_type(currTok, st_name));
+    getNextTok();
+    assert(currTok == Token::Dot);
+    getNextTok(); // eat dor
+    string f_name = IdentStr;
+    getNextTok();
+    assert(currTok == Token::Eq);
+    getNextTok();
+    unique_ptr<BaseAST> val = parseExpr();
+    return make_unique<TypeFieldStoreAST>(st_name, f_name, move(val));
+}
+
 unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad() {
     string st_name = IdentStr;
     assert(!if_type(currTok, st_name));
     getNextTok();
-    assert(currTok == Token::Dot); 
+    assert(currTok == Token::Dot);
     getNextTok(); // eat dor
     string f_name = IdentStr;
     getNextTok();
@@ -459,7 +475,7 @@ unique_ptr<BaseAST> ASTParser::parseType() {
         fields.emplace(f_name, move(f_val));
     }
     getNextTok();
-    return make_unique<TypeAST>(name, move(fields));  
+    return make_unique<TypeAST>(name, move(fields));
 }
 
 // var ::= <type>* <literal> ( '=' <expr> )* ';'
@@ -468,7 +484,7 @@ unique_ptr<BaseAST> ASTParser::parseVar() {
         string type = IdentStr;
 
         TType t = strToType(type);
-        
+
         getNextTok(); // eat type
 
         assert(if_ident(currTok, IdentStr));

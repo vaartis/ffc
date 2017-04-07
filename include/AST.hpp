@@ -22,6 +22,14 @@ class TypeDefAST : public BaseAST {
         vector<pair<string, TType>> fields;
 };
 
+class TypeFieldStoreAST : public BaseAST {
+    public:
+    TypeFieldStoreAST(string s_n, string f_n, unique_ptr<BaseAST> v) : struct_name(s_n), field_name(f_n), value(move(v)) {}
+        string struct_name;
+        string field_name;
+        unique_ptr<BaseAST> value;
+};
+
 class TypeFieldLoadAST : public BaseAST {
     public:
         TypeFieldLoadAST(string st_n, string f_n) : struct_name(st_n), field_name(f_n) {}

@@ -110,7 +110,7 @@ class CodeGen {
         void AST2IR();
         void genCompiledIn();
         Value *genExpr(unique_ptr<BaseAST> obj);
-    
+
         Type *getLLVMType(TType t); // build-in
         Type *getLLVMType(string s); // custom
 };
@@ -153,7 +153,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
         if (decl->value != nullptr) {
             Value *v = genExpr(move(decl->value));
-            
+
             if (t != v->getType())
                 throw runtime_error(string("Invalid type assigned to ") + decl->name);
 
@@ -248,18 +248,18 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
                 if (index_i == s.fields.end())
                     throw runtime_error("Unknown field: " + f_name);
-                
+
                 unsigned int index = distance(s.fields.begin(), index_i);
 
                 Value * this_field = builder->CreateStructGEP(s.type, tmp_struct, index);
                 builder->CreateStore(f_val, this_field);
             }
             return builder->CreateLoad(tmp_struct);
-            
+
         } catch (out_of_range) {
             throw runtime_error("Unknown custom type: " + st->name);
         }
-    } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
+    } else if (auto st = dynamic_cast<TypeFieldStoreAST  *>(obj.get())) {
         try {
             auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
 
@@ -268,7 +268,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
             val->getType()->print(rso);
             string type_name = rso.str();
             type_name = type_name.substr(1, type_name.length() - 2);
-            
+
             LLVMStruct s = struct_types.at(type_name);
 
             auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
@@ -280,12 +280,42 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
                 if (index_i == s.fields.end())
                     throw runtime_error("Unknown field: " + st->field_name);
-                
+
+                unsigned int index = distance(s.fields.begin(), index_i);
+
+                Value *this_field = builder->CreateStructGEP(s.type, val, index);
+                return builder->CreateStore(genExpr(move(st->value)), this_field);
+
+        } catch(out_of_range) {
+            throw runtime_error(string("Undefined varible: ") + st->struct_name);
+        }
+    } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
+        try {
+            auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
+
+            string type_str;
+            raw_string_ostream rso(type_str);
+            val->getType()->print(rso);
+            string type_name = rso.str();
+            type_name = type_name.substr(1, type_name.length() - 2);
+
+            LLVMStruct s = struct_types.at(type_name);
+
+            auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
+                                                                         if (v.first == st->field_name)
+                                                                             return true;
+                                                                         else
+                                                                             return false;
+                                                                     });
+
+                if (index_i == s.fields.end())
+                    throw runtime_error("Unknown field: " + st->field_name);
+
                 unsigned int index = distance(s.fields.begin(), index_i);
 
                 Value *this_field = builder->CreateStructGEP(s.type, val, index);
                 return builder->CreateLoad(this_field);
-            
+
         } catch(out_of_range) {
             throw runtime_error(string("Undefined varible: ") + st->struct_name);
         }
@@ -474,7 +504,7 @@ void CodeGen::AST2IR() {
         vector<Type *> decl_els;
         transform(els.begin(), els.end(), back_inserter(decl_els),
                   [&](pair<string, Type *> t) { return t.second; });
-        
+
         StructType *type = StructType::create(decl_els, st.first);
 
         struct_types.emplace(st.first, LLVMStruct(els, type));
@@ -510,7 +540,7 @@ void CodeGen::AST2IR() {
             genExpr(move(expr));
         }
     }
-} 
+}
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
