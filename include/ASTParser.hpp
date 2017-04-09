@@ -56,19 +56,23 @@ class ASTParser {
         unique_ptr<OperatorDefAST> parseOperatorDef();
         void parseTypeDef();
 
-        unique_ptr<BaseAST> parseIntLiteral();
-        unique_ptr<BaseAST> parseFloatLiteral();
-        unique_ptr<BaseAST> parseBoolLiteral();
-        unique_ptr<BaseAST> parseStrLiteral();
+        #define gen_parse(wh) unique_ptr<BaseAST> parse##wh();
 
-        unique_ptr<BaseAST> parseTypeFieldStore();
-        unique_ptr<BaseAST> parseTypeFieldLoad();
-        unique_ptr<BaseAST> parseType();
-        unique_ptr<BaseAST> parseStmt();
-        unique_ptr<BaseAST> parseFncCall();
-        unique_ptr<BaseAST> parseVar();
-        unique_ptr<BaseAST> parseExpr();
-        unique_ptr<BaseAST> parseRet();
-        unique_ptr<BaseAST> parseIf();
+        gen_parse(IntLiteral);
+        gen_parse(FloatLiteral);
+        gen_parse(BoolLiteral);
+        gen_parse(StrLiteral);
+
+        gen_parse(TypeFieldStore);
+        gen_parse(TypeFieldLoad);
+        gen_parse(Type);
+        gen_parse(Stmt);
+        gen_parse(FncCall);
+        gen_parse(Var);
+        gen_parse(Expr);
+        gen_parse(Ret);
+        gen_parse(If);
+        gen_parse(While);
+
         unique_ptr<BaseAST> parseOperator(unique_ptr<BaseAST> lhs);
 };

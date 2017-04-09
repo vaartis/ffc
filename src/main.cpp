@@ -338,6 +338,33 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         } catch(out_of_range) {
             throw runtime_error(string("Undefined varible: ") + v->value);
         }
+    } else if (auto wh = dynamic_cast<WhileAST *>(obj.get())) {
+        BasicBlock *l_cond = BasicBlock::Create(context, "loop.cond");
+        BasicBlock *l_while  = BasicBlock::Create(context, "loop.while");
+        BasicBlock *l_end = BasicBlock::Create(context, "loop.end");
+
+        builder->CreateBr(l_cond);
+
+        builder->SetInsertPoint(l_cond);
+        Value *cond = genExpr(move(wh->cond));
+        builder->CreateCondBr(cond, l_while, l_end);
+
+        builder->SetInsertPoint(l_while);
+
+        for (auto &el : wh->body) {
+            genExpr(move(el));
+        }
+
+        builder->CreateBr(l_cond);
+
+        builder->SetInsertPoint(l_end);
+
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_cond);
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_while);
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_end);
+
+        return cond;
+
     } else if (auto ifb = dynamic_cast<IfAST *>(obj.get())) {
         BasicBlock *then = BasicBlock::Create(context, "if.then");
         BasicBlock *els = BasicBlock::Create(context, "if.else");

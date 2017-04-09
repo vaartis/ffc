@@ -121,6 +121,7 @@ pair<Token, string> TokenStream::getTok() {
     match(IdentStr, "false", Token::BoolLit);
 
     match(IdentStr, "if", Token::If);
+    match(IdentStr, "while", Token::While);
     match(IdentStr, "else", Token::Else);
     match(IdentStr, "ret", Token::Ret);
 

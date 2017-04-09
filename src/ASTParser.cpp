@@ -59,6 +59,24 @@ bool ASTParser::isType(string s) {
 #define if_type(t, s) (t == Token::Type || isType(s))
 #define if_ident(t, s) (t == Token::Ident && !isType(s))
 
+unique_ptr<BaseAST> ASTParser::parseWhile() {
+    getNextTok(); // eat while
+    unique_ptr<BaseAST> cond = parseExpr();
+
+    assert(currTok == Token::OpCB);
+    getNextTok(); // eat {
+
+    vector<unique_ptr<BaseAST>> body;
+
+    while (currTok != Token::ClCB) {
+        body.push_back(parseStmt());
+    }
+
+    getNextTok(); // eat }
+
+    return make_unique<WhileAST>(move(cond), move(body));
+}
+
 void ASTParser::parseTypeDef() {
     getNextTok(); // eat type token
     assert(if_ident(currTok, IdentStr));
@@ -220,19 +238,8 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     getNextTok(); //eat {
 
     vector< unique_ptr<BaseAST> > body;
-
     while (currTok != Token::ClCB) {
-        bool skip_sm = false;
-
-        if (currTok == Token::If)
-            skip_sm = true;
-
         body.push_back(parseStmt());
-
-        if (currTok != Token::ClCB && skip_sm == false) {
-            assert(currTok == Token::Semicolon);
-            getNextTok();
-        }
     }
 
     return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
@@ -303,32 +310,43 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
     string maybe_tmp = IdentStr;
     string maybe_tmp2 = tokens.peek().second;
 
-    // var ::= <type>* <literal> ( '=' <expr> )* ';'
+    bool skip_sm = false;
 
-    if ((if_type(cTok, maybe_tmp) && if_ident(nTok, maybe_tmp2)) || (if_ident(cTok, maybe_tmp) && nTok == Token::Eq)) {
-        return parseVar();
-    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
-        return parseFncCall();
-    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
-        return parseTypeFieldStore();
+    unique_ptr<BaseAST> stmt = [&]() -> unique_ptr<BaseAST> { // hackery
+        if ((if_type(cTok, maybe_tmp) && if_ident(nTok, maybe_tmp2)) || (if_ident(cTok, maybe_tmp) && nTok == Token::Eq)) {
+            return parseVar();
+        } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
+            return parseFncCall();
+        } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
+            return parseTypeFieldStore();
+        }
+
+        switch (currTok) {
+            case Token::IntLit:
+                return parseIntLiteral();
+            case Token::FloatLit:
+                return parseFloatLiteral();
+            case Token::StrLit:
+                return parseStrLiteral();
+            case Token::Ret:
+                return parseRet();
+            case Token::If:
+                skip_sm = true;
+                return parseIf();
+            case Token::While:
+                skip_sm = true;
+                return parseWhile();
+            default:
+                throw runtime_error("Parssing failed:" + IdentStr);
+        }
+    }();
+
+    if (!skip_sm) {
+        assert(currTok == Token::Semicolon);
+        getNextTok();
     }
 
-    switch (currTok) {
-        case Token::IntLit:
-            return parseIntLiteral();
-        case Token::FloatLit:
-            return parseFloatLiteral();
-        case Token::StrLit:
-            return parseStrLiteral();
-        case Token::Ret:
-            return parseRet();
-        case Token::If:
-            return parseIf();
-        default:
-            break;
-    }
-
-    return nullptr;
+    return move(stmt);
 }
 
 // if ::= if <expr> { <stmt>* }

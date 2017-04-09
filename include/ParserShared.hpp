@@ -20,8 +20,9 @@ enum class Token {
     Operator,
     Include,
     OperatorDef,
-    None,
+    None, // Initial
     Fnc,
+    While,
     Extern,
     Ident,
     IntLit,
