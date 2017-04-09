@@ -6,7 +6,7 @@ file(GLOB ff_SRC "src/*.cpp")
 
 include_directories("include")
 
-add_executable(ff ${ff_SRC})
+add_executable(ffc ${ff_SRC})
 
 find_package(LLVM REQUIRED CONFIG)
 include_directories(${LLVM_INCLUDE_DIRS})
@@ -16,4 +16,4 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++1z -g")
 
 llvm_map_components_to_libnames(llvm_libs all)
 
-target_link_libraries (ff ${llvm_libs})
+target_link_libraries (ffc ${llvm_libs})
