@@ -157,7 +157,9 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
             if (t != v->getType())
                 throw runtime_error(string("Invalid type assigned to ") + decl->name);
 
-            return builder->CreateStore(v, alloc, false);
+            builder->CreateStore(v, alloc, false);
+
+            return v;
         }
         return alloc;
     } else if (auto ass = dynamic_cast<AssAST *>(obj.get())) {
@@ -169,7 +171,9 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
             if (v->getType() != var->getType()->getContainedType(0)) // var is always <type>* (alloca type), so we check the type it points to
                 throw runtime_error(string("Invalid type assigned to ") + ass->name);
 
-            return builder->CreateStore(v, var, false);
+            builder->CreateStore(v, var, false);
+
+            return v;
         } catch (out_of_range) {
             throw runtime_error(string("Undefined variable: ") + ass->name);
         }
@@ -359,8 +363,9 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(els);
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
 
-        return c;
+        return cond;
     }
+
     throw runtime_error("strange expr");
 }
 
@@ -378,13 +383,15 @@ void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unus
         t2->print(s);
         string name = s.str();
 
-        Function *fnc = Function::Create(FunctionType::get(ret, vector{t1,t2}, false), Function::LinkOnceAnyLinkage, name, module.get());
+        Function *fnc = Function::Create(FunctionType::get(ret, vector<Type *>{t1,t2}, false), Function::LinkOnceAnyLinkage, name, module.get());
         fnc->addFnAttr(Attribute::AlwaysInline);
 
         BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
         builder->SetInsertPoint(enter);
 
-        builder->CreateRet(get<4>(fncdef)(&*fnc->arg_begin(), &*fnc->arg_end() - 1));
+        auto &arg_list = fnc->getArgumentList();
+
+        builder->CreateRet(get<4>(fncdef)(&*arg_list.begin(), &*--arg_list.end()));
         functions.emplace(name, LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));
     };
 
@@ -413,15 +420,16 @@ void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unus
         genTuple("<", Float, Float, Bool, CreateFCmpOLT),
     };
 
-    for (auto &o : ops)
+    for (auto &o : ops) {
         defOp(o);
+    }
 
-    FunctionType *ftoi_t = FunctionType::get(getLLVMType(_TType::Int), getLLVMType(_TType::Float), false);
+    /*FunctionType *ftoi_t = FunctionType::get(getLLVMType(_TType::Int), getLLVMType(_TType::Float), false);
     Function *ftoi = Function::Create(ftoi_t, Function::LinkOnceAnyLinkage, "floatToInt", module.get());
     BasicBlock *enter = BasicBlock::Create(context, "entry", ftoi);
     builder->SetInsertPoint(enter);
     builder->CreateRet(builder->CreateFPToSI(&*ftoi->args().begin(), getLLVMType(_TType::Int)));
-    functions.emplace("floatToInt", LLVMFn(ftoi, map<string, Value *>(), ftoi_t->getReturnType()));
+    functions.emplace("floatToInt", LLVMFn(ftoi, map<string, Value *>(), ftoi_t->getReturnType()));*/
 
     compiledInEmited = true;
 }
@@ -483,7 +491,7 @@ void CodeGen::AST2IR() {
         fn_vars.emplace(op->lhs.first, alloc_lhs);
 
         Value *alloc_rhs = builder->CreateAlloca(rhs_type, nullptr, op->rhs.first);
-        builder->CreateStore(fnc->arg_end() - 1, alloc_rhs);
+        builder->CreateStore(&*fnc->arg_end()--, alloc_rhs);
         fn_vars.emplace(op->rhs.first, alloc_rhs);
 
         functions.emplace(name, LLVMFn(fnc, fn_vars, getLLVMType(op->ret_type)));

@@ -136,4 +136,3 @@ pair<Token, string> TokenStream::getTok() {
 
     return {Token::Ident, IdentStr};
 }
-

@@ -280,17 +280,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     vector< unique_ptr<BaseAST> > body;
 
     while (currTok != Token::ClCB) {
-        bool skip_sm = false;
-
-        if (currTok == Token::If)
-            skip_sm = true;
-
         body.push_back(parseStmt());
-
-        if (currTok != Token::ClCB && skip_sm == false) {
-            assert(currTok == Token::Semicolon);
-            getNextTok();
-        }
     }
 
     auto res = make_unique<FncDefAST>(name, args, ret_type, move(body));
@@ -298,7 +288,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
 }
 
 unique_ptr<BaseAST> ASTParser::parseRet() {
-    getNextTok();
+    getNextTok(); // eat ret
 
     if (currTok != Token::Semicolon)
         return make_unique<RetAST>(parseExpr());
@@ -306,8 +296,6 @@ unique_ptr<BaseAST> ASTParser::parseRet() {
         return make_unique<RetAST>(nullptr);
 }
 
-// stmt ::= var | expr ';'
-// expr ::= <expr> | <fncall> | <return>
 unique_ptr<BaseAST> ASTParser::parseStmt() {
     auto cTok = currTok;
     auto nTok = tokens.peek().first;
@@ -358,14 +346,9 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
 
     while (currTok != Token::ClCB) {
         body.push_back(parseStmt());
-
-        if (currTok != Token::ClCB) {
-            assert(currTok == Token::Semicolon);
-            getNextTok();
-        }
     }
 
-    getNextTok(); // eat { or get to else
+    getNextTok(); // eat } or get to else
 
     if (currTok == Token::Else) {
         getNextTok(); // eat else
@@ -374,11 +357,8 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
 
         getNextTok(); // eat {
 
-        else_body.push_back(parseStmt());
-
-        if (currTok != Token::ClCB) {
-            assert(currTok == Token::Semicolon);
-            getNextTok();
+        while (currTok != Token::ClCB) {
+            else_body.push_back(parseStmt());
         }
         getNextTok(); // eat }
     }
@@ -401,8 +381,10 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
     switch(currTok) { // Simple casese
         case Token::IntLit:
             return parseIntLiteral();
-        case Token::BoolLit:
+        case Token::FloatLit:
             return parseFloatLiteral();
+        case Token::BoolLit:
+            return parseBoolLiteral();
         case Token::StrLit:
             return parseStrLiteral();
         default: // Cases with variables
@@ -442,6 +424,7 @@ unique_ptr<BaseAST> ASTParser::parseTypeFieldStore() {
     getNextTok(); // eat dor
     string f_name = IdentStr;
     getNextTok();
+
     assert(currTok == Token::Eq);
     getNextTok();
     unique_ptr<BaseAST> val = parseExpr();
@@ -453,10 +436,17 @@ unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad() {
     assert(!if_type(currTok, st_name));
     getNextTok();
     assert(currTok == Token::Dot);
-    getNextTok(); // eat dor
+    getNextTok(); // eat dot
     string f_name = IdentStr;
     getNextTok();
-    return make_unique<TypeFieldLoadAST>(st_name, f_name);
+
+    auto res = make_unique<TypeFieldLoadAST>(st_name, f_name);
+
+    if (currTok == Token::Operator) {
+        return parseOperator(move(res));
+    }
+
+    return res;
 }
 
 unique_ptr<BaseAST> ASTParser::parseType() {
@@ -535,7 +525,7 @@ unique_ptr<BaseAST> ASTParser::parseFncCall() {
         args.push_back(parseExpr());
     }
 
-    getNextTok(); // eat ;
+    getNextTok(); // eat }
 
     auto res = make_unique<FncCallAST>(name, move(args));
 
