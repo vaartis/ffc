@@ -207,11 +207,11 @@ class OperatorAST : public BaseAST {
 
 class IfAST : public BaseAST {
     public:
-        IfAST(unique_ptr<BaseAST> c, vector< unique_ptr<BaseAST> > bd, vector< unique_ptr<BaseAST> > el) : cond(move(c)), body(move(bd)), else_body(move(el)) {}
+        IfAST(unique_ptr<BaseAST> c, vector<unique_ptr<BaseAST>> bd, vector<unique_ptr<BaseAST>> el) : cond(move(c)), body(move(bd)), else_body(move(el)) {}
 
         unique_ptr<BaseAST> cond;
-        vector< unique_ptr<BaseAST> > body;
-        vector< unique_ptr<BaseAST> > else_body;
+        vector<unique_ptr<BaseAST>> body;
+        vector<unique_ptr<BaseAST>> else_body;
 
         void dump() {
             Print::print("If (");

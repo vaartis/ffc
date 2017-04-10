@@ -35,6 +35,7 @@ enum class Token {
     ClCB,
     Semicolon,
     Dot,
+    Comma,
     Eq,
     Type,
     TypeDef,

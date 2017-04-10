@@ -345,23 +345,21 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
         builder->CreateBr(l_cond);
 
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_cond);
+
         builder->SetInsertPoint(l_cond);
         Value *cond = genExpr(move(wh->cond));
         builder->CreateCondBr(cond, l_while, l_end);
 
         builder->SetInsertPoint(l_while);
-
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_while);
         for (auto &el : wh->body) {
             genExpr(move(el));
         }
-
         builder->CreateBr(l_cond);
 
-        builder->SetInsertPoint(l_end);
-
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_cond);
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_while);
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_end);
+        builder->SetInsertPoint(l_end);
 
         return cond;
 
@@ -374,11 +372,13 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
         Value *c = builder->CreateCondBr(cond, then, els);
 
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(then);
         builder->SetInsertPoint(then);
         for (auto &v : ifb->body)
             genExpr(move(v));
         builder->CreateBr(ifend);
 
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(els);
         builder->SetInsertPoint(els);
         for (auto &v : ifb->else_body)
             genExpr(move(v));
@@ -386,8 +386,6 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
         builder->SetInsertPoint(ifend);
 
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(then);
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(els);
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
 
         return cond;

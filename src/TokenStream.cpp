@@ -133,6 +133,7 @@ pair<Token, string> TokenStream::getTok() {
         match_char('=', Token::Eq);
         match_char(';', Token::Semicolon);
         match_char('.', Token::Dot);
+        match_char(',', Token::Comma);
     }
 
     return {Token::Ident, IdentStr};

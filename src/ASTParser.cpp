@@ -93,9 +93,18 @@ void ASTParser::parseTypeDef() {
         assert(if_ident(currTok, IdentStr));
         string name = IdentStr;
         getNextTok();
-        assert(currTok == Token::Semicolon);
-        getNextTok(); // eat ;
-        fields.push_back({name, tp});
+
+        if (currTok != Token::ClCB && currTok != Token::Comma) { // comma at the end is optional
+            throw runtime_error("Expected comma/end of type in definition of " + name);
+        } else {
+            if (currTok == Token::Comma) {
+                getNextTok(); // eat ,
+                fields.push_back({name, tp});
+            } else {
+                fields.push_back({name, tp});
+                break;
+            }
+        }
     }
     typedefs.emplace(name, make_shared<TypeDefAST>(name, fields));
 }
@@ -179,6 +188,11 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
         args.push_back(t);
 
         getNextTok();
+
+        if (currTok != Token::ClP) {
+            assert(currTok == Token::Comma);
+            getNextTok();
+        }
     }
 
     getNextTok(); // eat )
@@ -219,6 +233,9 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     lhs.first = IdentStr;
 
     getNextTok();
+    assert(currTok == Token::Comma);
+    getNextTok(); // eat comma
+
     assert(if_type(currTok, IdentStr));
     rhs.second = strToType(IdentStr);
     getNextTok();
@@ -245,7 +262,6 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
 }
 
-/// fncdef ::= 'fnc' <literal> '(' (<type> <literal>)* ')' <type>*
 unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     getNextTok(); // eat fnc
 
@@ -270,6 +286,12 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
         args.insert(make_pair(IdentStr, t));
 
         getNextTok();
+
+        if (currTok != Token::ClP) {
+            assert(currTok == Token::Comma);
+            getNextTok();
+        }
+
     }
     getNextTok(); // eat )
 
@@ -481,6 +503,12 @@ unique_ptr<BaseAST> ASTParser::parseType() {
         getNextTok(); // eat =
         unique_ptr<BaseAST> f_val = parseExpr();
         fields.emplace(f_name, move(f_val));
+
+        if (currTok != Token::ClCB) {
+            assert(currTok == Token::Comma);
+            getNextTok();
+        }
+
     }
     getNextTok();
     return make_unique<TypeAST>(name, move(fields));
@@ -528,7 +556,6 @@ unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {
     return make_unique<OperatorAST>(name, move(lhs), move(rhs));
 }
 
-// fncall ::= <literal> '(' <literal>* ')'
 unique_ptr<BaseAST> ASTParser::parseFncCall() {
     vector< unique_ptr<BaseAST> > args;
 
@@ -541,11 +568,19 @@ unique_ptr<BaseAST> ASTParser::parseFncCall() {
 
     while (currTok != Token::ClP) {
         args.push_back(parseExpr());
+        if (currTok != Token::ClP) {
+            assert(currTok == Token::Comma);
+            getNextTok();
+        }
     }
 
     getNextTok(); // eat }
 
     auto res = make_unique<FncCallAST>(name, move(args));
+
+    if (currTok == Token::Operator) {
+        return parseOperator(move(res));
+    }
 
     return move(res);
 }
