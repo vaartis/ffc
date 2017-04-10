@@ -344,12 +344,6 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
         }
 
         switch (currTok) {
-            case Token::IntLit:
-                return parseIntLiteral();
-            case Token::FloatLit:
-                return parseFloatLiteral();
-            case Token::StrLit:
-                return parseStrLiteral();
             case Token::Ret:
                 return parseRet();
             case Token::If:

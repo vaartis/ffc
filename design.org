@@ -1,0 +1,60 @@
+* F.F. language design (kind of)
+
+** Top level structure
+#+BEGIN_SRC BNF
+module ::= <include>
+         | <type-def>
+         | <fnc-def>
+         | <extern>
+         | <operator-def>
+         ;
+type = <built-in> | <ident> ; buill-in are str,int etc.
+include ::= 'include' <string-literal> <string-literal>* ';'
+type-def ::= 'type' <ident> '{' ( <type> <ident> ',' )+ '}'
+fnc-def ::= 'fnc' <ident> '(' (<type> <ident> ',')* ')' <type>* { <statement>* }
+extern ::= 'extern' <ident> '(' (<type> ',')* ')' <type>*
+operator-def ::= 'operator' <operator-char>+ '(' (<type> <ident> ',')* ')' <type>* { <statement>* }
+operator-char ::= '!' | '~' | '@' | '#' | '$' | '%' | '^' | '&' | '*' | '-' | '+' | '\' | '/' | '<' | '>' | '=' ; note, that operator can't start with '=' if it's not '=='
+#+END_SRC
+
+** Statements
+#+BEGIN_SRC BNF
+statement ::= <variable>
+            | <fnc-call>
+            | <type-field-store>
+            | <ret>
+            | <if>
+            | <while>
+            ;
+
+variable ::= <var-create> | <var-assign> ';'
+var-create ::= <type> <ident> ('=' <expr> )* ';'
+var-assign ::= <ident> '=' <expr> ';'
+
+type-field-store ::= <ident> '.' <ident> '=' <expr> ';'
+ret ::= 'ret' <expr> ';'
+if ;:= 'if' <bool-expr> '{' <stmt>* '}' ( 'else' '{' <stmt>* '}' )*
+while ::= 'while' <bool-expr> '{' <stmt>* '}'
+#+END_SRC
+
+** Expressions
+#+BEGIN_SRC BNF
+expr ::= <int-literal>
+       | <float-literal>
+       | <bool-literal>
+       | <str-literal>
+       | <fnc-call>
+       | <type-field-load>
+       | <ident>
+       | <operator>
+       | <type-literal>
+
+int-literal ::= 0-9+
+float-literal ::= 0-9+ '.' 0-9+
+bool-literal ::= 'true' | 'false'
+str-literal ::= '"' <any> '"'
+fnc-call ::= <ident> '(' <expr>* ')'
+type-field-load ::= <ident> '.' <ident>
+operator ::= <expr> <operator-char>+ <expr>
+type-literal ::= <type> '{' (<ident> '=' <expr> ',')+ '}'
+#+END_SRC
