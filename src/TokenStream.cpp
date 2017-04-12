@@ -6,13 +6,13 @@ long TokenStream::length() {
     return vec.size();
 }
 
-pair<Token, string> TokenStream::get() {
+TokenInfo TokenStream::get() {
     if (index++ >= vec.size())
         throw TokenStream::EOFException();
     return vec[index - 1];
 }
 
-pair<Token, string> TokenStream::peek() {
+TokenInfo TokenStream::peek() {
     return vec[index];
 }
 
@@ -31,52 +31,63 @@ TokenStream::TokenStream(string s) {
     }
 }
 
-pair<Token, string> TokenStream::getTok() {
+char TokenStream::getChar() {
+    char res = text->get();
+    symbol++;
+    if (res == '\n') {
+        line++;
+        symbol = 0;
+    }
+    return res;
+}
+
+TokenInfo TokenStream::getTok() {
     string IdentStr;
 
     while (isspace(lastchr))
-        lastchr = text->get();
+        lastchr = getChar();
 
     if (lastchr == '"') {
-        lastchr = text->get();
+        lastchr = getChar();
         while (lastchr != '"') {
             IdentStr += lastchr;
-            lastchr = text->get();
+            lastchr = getChar();
         }
-        lastchr = text->get();
-        return {Token::StrLit, IdentStr};
+        lastchr = getChar();
+
+        return TokenInfo(Token::StrLit, IdentStr, symbol, line);
     }
 
     static vector<char> op_chars = {'!','~','@','#','$','%','^','&','*','-','+','\\','/','<','>','='};
 
     if (any_of(begin(op_chars), --end(op_chars), [&](char c) { return lastchr == c; })) {
         IdentStr = lastchr;
-        lastchr = text->get();
+        lastchr = getChar();
         while (any_of(begin(op_chars), end(op_chars), [&](char c) { return lastchr == c; })) {
             IdentStr += lastchr;
-            lastchr = text->get();
+            lastchr = getChar();
         }
-        return {Token::Operator, IdentStr};
+        return TokenInfo(Token::Operator, IdentStr, symbol, line);
     }
 
     bool f = false;
     if (isalpha(lastchr) || lastchr == '_') {
         f = true;
         IdentStr = lastchr;
-        while (isalnum((lastchr = text->get())) || lastchr == '_')
+        while (isalnum((lastchr = getChar())) || lastchr == '_')
             IdentStr += lastchr;
     }
 
     if (lastchr == '=') {
         IdentStr = lastchr;
-        lastchr = text->get();
+        lastchr = getChar();
         if (lastchr == '=') {
             IdentStr += lastchr;
-            lastchr = text->get();
-            return {Token::Operator, IdentStr};
+            lastchr = getChar();
+            return TokenInfo(Token::Operator, IdentStr, symbol, line);
         } else {
-            lastchr = text->get();
-            return {Token::Eq, IdentStr};
+            lastchr = getChar();
+            return TokenInfo(Token::Eq, IdentStr, symbol, line);
         }
     }
 
@@ -88,22 +99,22 @@ pair<Token, string> TokenStream::getTok() {
             if (lastchr == '.')
                 f = true;
             numstr += lastchr;
-            lastchr = text->get();
+            lastchr = getChar();
         } while (isdigit(lastchr) || lastchr == '.');
 
         if (!f)
-            return {Token::IntLit, numstr};
+            return TokenInfo(Token::IntLit, numstr, symbol, line);
         else
-            return {Token::FloatLit, numstr};
+            return TokenInfo(Token::FloatLit, numstr, symbol, line);
     }
 
     #define match(wh, to, type) if (wh == to)\
-            return {type, IdentStr};
+            return TokenInfo(type, IdentStr, symbol, line);
 
     #define match_char(to, type) if (lastchr == to) {\
-        lastchr = text->get();\
+        lastchr = getChar();\
         IdentStr = to;\
-        return {type, IdentStr};\
+        return TokenInfo(type, IdentStr, symbol, line);\
     }
 
     match(IdentStr, "==", Token::Operator);
@@ -114,7 +125,7 @@ pair<Token, string> TokenStream::getTok() {
     match(IdentStr, "type", Token::TypeDef);
 
     if (any_of(begin(types), end(types), [&](string s) { return s == IdentStr; })) {
-        return {Token::Type, IdentStr};
+        return TokenInfo(Token::Type, IdentStr, symbol, line);
     }
 
     match(IdentStr, "true", Token::BoolLit);
@@ -136,5 +147,5 @@ pair<Token, string> TokenStream::getTok() {
         match_char(',', Token::Comma);
     }
 
-    return {Token::Ident, IdentStr};
+    return TokenInfo(Token::Ident, IdentStr, symbol, line);
 }

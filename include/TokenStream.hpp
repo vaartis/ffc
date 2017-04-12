@@ -13,22 +13,32 @@ using std::vector;
 using std::stringstream;
 using std::unique_ptr;
 
+struct TokenInfo {
+    public:
+        TokenInfo(Token t, string i, long x, long y) : tok(t), IdentStr(i), symbol(x), line(y) {}
+        Token tok;
+        string IdentStr;
+        struct { long symbol; long line; };
+};
+
 class TokenStream {
     public:
         TokenStream(string s);
 
         struct EOFException : exception {};
 
+        char getChar();
         long length();
-        pair<Token, string> get();
-        pair<Token, string> peek();
+        TokenInfo get();
+        TokenInfo peek();
         vector<string> getTypes();
     private:
+        long line = 0, symbol = 0;
         long index = 0;
         unique_ptr<stringstream> text;
-        vector< pair<Token, string> > vec;
+        vector<TokenInfo> vec;
         char lastchr = ' ';
         vector<string> types;
 
-        pair<Token, string> getTok();
+        TokenInfo getTok();
 };

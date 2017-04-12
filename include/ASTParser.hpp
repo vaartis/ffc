@@ -39,6 +39,8 @@ class ASTParser {
         string IdentStr;
         Token currTok = Token::None;
 
+        long symbol = 0, line = 0;
+
         vector<unique_ptr<FncDefAST>> functions;
         vector<unique_ptr<ExternFncAST>> ext_functions;
         vector<unique_ptr<OperatorDefAST>> operators;

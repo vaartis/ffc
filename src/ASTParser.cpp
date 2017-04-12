@@ -13,9 +13,11 @@
 using namespace std;
 
 Token ASTParser::getNextTok() {
-    pair<Token, string> r = tokens.get();
-    IdentStr = r.second;
-    return currTok = r.first;
+    TokenInfo r = tokens.get();
+    IdentStr = r.IdentStr;
+    symbol = r.symbol;
+    line = r.line;
+    return currTok = r.tok;
 }
 
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
@@ -327,10 +329,10 @@ unique_ptr<BaseAST> ASTParser::parseRet() {
 
 unique_ptr<BaseAST> ASTParser::parseStmt() {
     auto cTok = currTok;
-    auto nTok = tokens.peek().first;
+    auto nTok = tokens.peek().tok;
 
     string maybe_tmp = IdentStr;
-    string maybe_tmp2 = tokens.peek().second;
+    string maybe_tmp2 = tokens.peek().IdentStr;
 
     bool skip_sm = false;
 
@@ -403,7 +405,7 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
 unique_ptr<BaseAST> ASTParser::parseExpr() {
     static bool parsing_op = false;
 
-    Token nxt = tokens.peek().first;
+    Token nxt = tokens.peek().tok;
 
     if (!parsing_op && nxt == Token::Operator) {
         parsing_op = true;
