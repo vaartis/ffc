@@ -50,7 +50,7 @@ class ASTParser {
         Token getNextTok();
 
         bool isType(string);
-        TType strToType(string s);
+        TType parseTType();
 
         unique_ptr<IncludeAST> parseInclude();
         unique_ptr<FncDefAST> parseFncDef();

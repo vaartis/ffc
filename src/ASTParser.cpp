@@ -58,8 +58,34 @@ bool ASTParser::isType(string s) {
     return false;
 }
 
-#define if_type(t, s) (t == Token::Type || isType(s))
+#define if_type(t, s) (t == Token::Type || t == Token::Ref || isType(s))
 #define if_ident(t, s) (t == Token::Ident && !isType(s))
+
+TType ASTParser::parseTType() {
+    TType res;
+    if (currTok == Token::Ref) {
+        getNextTok();
+        return TType::withRef(make_shared<TType>(parseTType()));
+    } else if (if_type(currTok, IdentStr)) {
+        string s = IdentStr;
+        getNextTok();
+
+        if (s == "int")
+            return _TType::Int;
+        else if (s == "float")
+            return _TType::Float;
+        else if (s == "bool")
+            return _TType::Bool;
+        else if (s == "str")
+            return _TType::Str;
+        else if (isType(s))
+            return s; // custom type
+        else
+            throw runtime_error("Unknown type:" + s);
+    } else {
+         throw runtime_error("Expected REF or TYPE at " + to_string(line) + ":" + to_string(symbol));
+    }
+}
 
 unique_ptr<BaseAST> ASTParser::parseWhile() {
     getNextTok(); // eat while
@@ -89,9 +115,7 @@ void ASTParser::parseTypeDef() {
 
     vector<pair<string, TType>> fields;
     while (currTok != Token::ClCB) {
-        assert(isType(IdentStr));
-        TType tp = strToType(IdentStr);
-        getNextTok();
+        TType tp = parseTType();
         assert(if_ident(currTok, IdentStr));
         string name = IdentStr;
         getNextTok();
@@ -153,21 +177,6 @@ unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
     return move(res);
 }
 
-TType ASTParser::strToType(string s) {
-    if (s == "int")
-        return _TType::Int;
-    else if (s == "float")
-        return _TType::Float;
-    else if (s == "bool")
-        return _TType::Bool;
-    else if (s == "str")
-        return _TType::Str;
-    else if (isType(s))
-        return s; // custom type
-    else
-        throw runtime_error("Unknown type:" + s);
-}
-
 unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     getNextTok(); // eat extern
 
@@ -184,9 +193,7 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     vector<TType> args;
 
     while (currTok != Token::ClP) {
-        assert(if_type(currTok, IdentStr));
-
-        TType t = strToType(IdentStr);
+        TType t = parseTType();
         args.push_back(t);
 
         getNextTok();
@@ -202,8 +209,7 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     TType ret_type = _TType::Void;
 
     if (if_type(currTok, IdentStr)) {
-        ret_type = strToType(IdentStr);
-        getNextTok(); // eat type
+        ret_type = parseTType();
     }
 
     assert(currTok == Token::Semicolon);
@@ -228,9 +234,7 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     assert(currTok == Token::OpP);
 
     getNextTok();
-    assert(if_type(currTok, IdentStr));
-    lhs.second = strToType(IdentStr);
-    getNextTok();
+    lhs.second = parseTType();
     assert(if_ident(currTok, IdentStr));
     lhs.first = IdentStr;
 
@@ -238,9 +242,7 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     assert(currTok == Token::Comma);
     getNextTok(); // eat comma
 
-    assert(if_type(currTok, IdentStr));
-    rhs.second = strToType(IdentStr);
-    getNextTok();
+    rhs.second = parseTType();
     assert(if_ident(currTok, IdentStr));
     rhs.first = IdentStr;
     getNextTok();
@@ -248,9 +250,7 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     assert(currTok == Token::ClP);
     getNextTok(); // eat )
 
-    assert(if_type(currTok, IdentStr));
-    TType ret_type = strToType(IdentStr);
-    getNextTok(); // eat type
+    TType ret_type = parseTType();
 
     assert(currTok == Token::OpCB);
 
@@ -279,15 +279,12 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
 
     map <string, TType> args;
     while (currTok != Token::ClP) {
-        TType t = strToType(IdentStr);
-
-        getNextTok();
-
+        TType tp = parseTType();
         assert(if_ident(currTok, IdentStr));
-
-        args.insert(make_pair(IdentStr, t));
-
+        string name = IdentStr;
         getNextTok();
+
+        args.insert({name, tp});
 
         if (currTok != Token::ClP) {
             assert(currTok == Token::Comma);
@@ -300,8 +297,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     TType ret_type = _TType::Void;
 
     if (if_type(currTok, IdentStr)) {
-        ret_type = strToType(IdentStr);
-        getNextTok(); // eat type
+        ret_type = parseTType();
     }
 
     assert(currTok == Token::OpCB);
@@ -513,11 +509,7 @@ unique_ptr<BaseAST> ASTParser::parseType() {
 // var ::= <type>* <literal> ( '=' <expr> )* ';'
 unique_ptr<BaseAST> ASTParser::parseVar() {
     if (if_type(currTok, IdentStr)) { // Varible creation
-        string type = IdentStr;
-
-        TType t = strToType(type);
-
-        getNextTok(); // eat type
+        TType t = parseTType();
 
         assert(if_ident(currTok, IdentStr));
 

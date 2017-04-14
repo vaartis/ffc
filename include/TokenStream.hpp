@@ -33,7 +33,7 @@ class TokenStream {
         TokenInfo peek();
         vector<string> getTypes();
     private:
-        long line = 0, symbol = 0;
+        long line = 1, symbol = 1;
         long index = 0;
         unique_ptr<stringstream> text;
         vector<TokenInfo> vec;

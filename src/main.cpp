@@ -116,6 +116,16 @@ class CodeGen {
 };
 
 Type *CodeGen::getLLVMType(TType t) {
+    if (t.isRef()) {
+        Type *res;
+        while (t.isRef()) {
+            res = getLLVMType(*t.referenceTo)->getPointerTo();
+            t = *t.referenceTo;
+        }
+        return res;
+    }
+
+
     return visit([&](auto arg) -> Type * {
               using T = decltype(arg);
               if constexpr (is_same_v<_TType, T>) {
@@ -140,7 +150,7 @@ Type *CodeGen::getLLVMType(TType t) {
               } else {
                   throw runtime_error("Bug");
               }
-          }, t);
+          }, t.inner);
 }
 
 Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
