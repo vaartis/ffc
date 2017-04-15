@@ -26,6 +26,9 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
         try {
             getNextTok();
             switch(currTok) {
+                case Token::OperatorDef:
+                    operators.push_back(parseOperatorDef());
+                    break;
                 case Token::Fnc:
                     functions.push_back(parseFncDef());
                     break;
@@ -389,7 +392,8 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
     }
 
     if (!skip_sm) {
-        assert(currTok == Token::Semicolon);
+        if (currTok != Token::Semicolon)
+            throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
         getNextTok();
     }
 
