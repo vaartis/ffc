@@ -37,6 +37,7 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                     break;
                 case Token::TypeDef:
                     parseTypeDef();
+                    break;
                 default:
                     break;
             }
@@ -62,11 +63,7 @@ bool ASTParser::isType(string s) {
 #define if_ident(t, s) (t == Token::Ident && !isType(s))
 
 TType ASTParser::parseTType() {
-    TType res;
-    if (currTok == Token::Ref) {
-        getNextTok();
-        return TType::withRef(make_shared<TType>(parseTType()));
-    } else if (if_type(currTok, IdentStr)) {
+    if (if_type(currTok, IdentStr) && currTok != Token::Ref) {
         string s = IdentStr;
         getNextTok();
 
@@ -82,8 +79,11 @@ TType ASTParser::parseTType() {
             return s; // custom type
         else
             throw runtime_error("Unknown type:" + s);
+    } else if (currTok == Token::Ref) {
+        getNextTok();
+        return TType::withRef(make_shared<TType>(parseTType()));
     } else {
-         throw runtime_error("Expected REF or TYPE at " + to_string(line) + ":" + to_string(symbol));
+         throw runtime_error("Expected TYPE at " + to_string(line) + ":" + to_string(symbol));
     }
 }
 
@@ -196,8 +196,6 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
         TType t = parseTType();
         args.push_back(t);
 
-        getNextTok();
-
         if (currTok != Token::ClP) {
             assert(currTok == Token::Comma);
             getNextTok();
@@ -264,15 +262,7 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
 }
 
-unique_ptr<FncDefAST> ASTParser::parseFncDef() {
-    getNextTok(); // eat fnc
-
-    assert(if_ident(currTok, IdentStr));
-
-    string name = IdentStr;
-
-    getNextTok();
-
+map<string, TType> ASTParser::parseParams() {
     assert(currTok == Token::OpP);
 
     getNextTok(); // eat (
@@ -280,6 +270,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     map <string, TType> args;
     while (currTok != Token::ClP) {
         TType tp = parseTType();
+
         assert(if_ident(currTok, IdentStr));
         string name = IdentStr;
         getNextTok();
@@ -294,6 +285,20 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     }
     getNextTok(); // eat )
 
+    return args;
+}
+
+unique_ptr<FncDefAST> ASTParser::parseFncDef() {
+    getNextTok(); // eat fnc
+
+    assert(if_ident(currTok, IdentStr));
+
+    string name = IdentStr;
+
+    getNextTok();
+
+    map<string, TType> args = parseParams();
+
     TType ret_type = _TType::Void;
 
     if (if_type(currTok, IdentStr)) {
@@ -304,7 +309,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
 
     getNextTok(); //eat {
 
-    vector< unique_ptr<BaseAST> > body;
+    vector<unique_ptr<BaseAST>> body;
 
     while (currTok != Token::ClCB) {
         body.push_back(parseStmt());
@@ -323,6 +328,21 @@ unique_ptr<BaseAST> ASTParser::parseRet() {
         return make_unique<RetAST>(nullptr);
 }
 
+unique_ptr<BaseAST> ASTParser::parseVal() {
+    getNextTok(); // eat val
+    if (currTok == Token::Ident) {
+        if (tokens.peek().tok == Token::Eq) {
+            return make_unique<ValOfRefAST>(parseAss());
+        } else if (tokens.peek().tok == Token::Dot) {
+            return make_unique<ValOfRefAST>(parseTypeFieldStore());
+        } else {
+            return make_unique<ValOfRefAST>(parseExpr());
+        }
+    } else {
+        return make_unique<ValOfRefAST>(parseExpr());
+    }
+}
+
 unique_ptr<BaseAST> ASTParser::parseStmt() {
     auto cTok = currTok;
     auto nTok = tokens.peek().tok;
@@ -332,28 +352,41 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
 
     bool skip_sm = false;
 
-    unique_ptr<BaseAST> stmt = [&]() -> unique_ptr<BaseAST> { // hackery
-        if ((if_type(cTok, maybe_tmp) && if_ident(nTok, maybe_tmp2)) || (if_ident(cTok, maybe_tmp) && nTok == Token::Eq)) {
-            return parseVar();
-        } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
-            return parseFncCall();
-        } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
-            return parseTypeFieldStore();
-        }
+    unique_ptr<BaseAST> stmt;
 
+    if (if_type(cTok, maybe_tmp)) {
+        TType t = parseTType();
+
+        if (!if_ident(currTok, IdentStr))
+            throw runtime_error("Expected IDENT at " + to_string(line) + ":" + to_string(symbol));
+
+        stmt = parseVar(t);
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Eq) {
+        stmt = parseAss();
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
+        stmt = parseFncCall();
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
+         stmt = parseTypeFieldStore();
+    } else {
         switch (currTok) {
+            case Token::Val:
+                stmt = parseVal();
+                break;
             case Token::Ret:
-                return parseRet();
+                stmt = parseRet();
+                break;
             case Token::If:
                 skip_sm = true;
-                return parseIf();
+                stmt = parseIf();
+                break;
             case Token::While:
                 skip_sm = true;
-                return parseWhile();
+                stmt = parseWhile();
+                break;
             default:
-                throw runtime_error("Parssing failed:" + IdentStr);
+                throw runtime_error("Parsing failed: " + IdentStr);
         }
-    }();
+    }
 
     if (!skip_sm) {
         assert(currTok == Token::Semicolon);
@@ -411,6 +444,11 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
     }
 
     switch(currTok) { // Simple casese
+        case Token::Val:
+            return parseVal();
+        case Token::Ref:
+             getNextTok();
+             return make_unique<RefToValAST>(parseExpr());
         case Token::IntLit:
             return parseIntLiteral();
         case Token::FloatLit:
@@ -440,7 +478,7 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
                     getNextTok();
                     return move(res);
                 }
-            } else if (if_type(currTok, IdentStr)) {
+            } else if (if_type(currTok, IdentStr) && currTok != Token::Ref) {
                 return parseType();
             }
     }
@@ -507,33 +545,36 @@ unique_ptr<BaseAST> ASTParser::parseType() {
 }
 
 // var ::= <type>* <literal> ( '=' <expr> )* ';'
-unique_ptr<BaseAST> ASTParser::parseVar() {
-    if (if_type(currTok, IdentStr)) { // Varible creation
-        TType t = parseTType();
+unique_ptr<BaseAST> ASTParser::parseVar(TType t) {
+    assert(if_ident(currTok, IdentStr));
 
-        assert(if_ident(currTok, IdentStr));
+    string name = IdentStr;
 
-        string name = IdentStr;
+    getNextTok();
 
+    if (currTok == Token::Semicolon) {
+        return make_unique<DeclAST>(name, t, unique_ptr<BaseAST>(nullptr));
+    } else if (currTok == Token::Eq) {
         getNextTok();
 
-        if (currTok == Token::Semicolon) {
-            return make_unique<DeclAST>(name, t, unique_ptr<BaseAST>(nullptr));
-        } else if (currTok == Token::Eq) {
-            getNextTok();
-
-            return make_unique<DeclAST>(name, t, parseExpr());
-        }
-    } else if (if_ident(currTok, IdentStr)) { // varible assignment
-        string name = IdentStr;
-
-        getNextTok(); // eat =
-        getNextTok(); // set to next
-
-        return make_unique<AssAST>(name, parseExpr());
+        return make_unique<DeclAST>(name, t, parseExpr());
     }
 
-    throw runtime_error("Unknown token");
+    throw runtime_error("Failed variable parse at " + to_string(line) + ":" + to_string(symbol));
+}
+
+unique_ptr<BaseAST> ASTParser::parseAss() {
+    assert(if_ident(currTok, IdentStr));
+
+    string name = IdentStr;
+
+    getNextTok();
+
+    assert(currTok == Token::Eq);
+
+    getNextTok(); // eat =
+
+    return make_unique<AssAST>(name, parseExpr());
 }
 
 unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {

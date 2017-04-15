@@ -8,7 +8,7 @@ module ::= <include>
          | <extern>
          | <operator-def>
          ;
-type = <built-in> | <ident> ; buill-in are str,int etc.
+type = ('val' | 'ref')* <built-in> | <ident> ; buill-in are str,int etc.
 include ::= 'include' <string-literal> <string-literal>* ';'
 type-def ::= 'type' <ident> '{' ( <type> <ident> ',' )+ '}'
 fnc-def ::= 'fnc' <ident> '(' (<type> <ident> ',')* ')' <type>* { <statement>* }
@@ -48,7 +48,10 @@ expr ::= <int-literal>
        | <ident>
        | <operator>
        | <type-literal>
-
+       | <val>
+       | <ref>
+val ::= 'val' <expr>
+ref ;:= 'ref' <expr>
 int-literal ::= 0-9+
 float-literal ::= 0-9+ '.' 0-9+
 bool-literal ::= 'true' | 'false'

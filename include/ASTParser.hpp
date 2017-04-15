@@ -60,6 +60,11 @@ class ASTParser {
 
         #define gen_parse(wh) unique_ptr<BaseAST> parse##wh();
 
+        map<string, TType> parseParams();
+
+        unique_ptr<BaseAST> parseVar(TType t);
+        gen_parse(Ass);
+
         gen_parse(IntLiteral);
         gen_parse(FloatLiteral);
         gen_parse(BoolLiteral);
@@ -69,8 +74,8 @@ class ASTParser {
         gen_parse(TypeFieldLoad);
         gen_parse(Type);
         gen_parse(Stmt);
+        gen_parse(Val);
         gen_parse(FncCall);
-        gen_parse(Var);
         gen_parse(Expr);
         gen_parse(Ret);
         gen_parse(If);

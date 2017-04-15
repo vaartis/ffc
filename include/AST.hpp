@@ -324,6 +324,30 @@ class FncDefAST : public BaseAST {
         }
 };
 
+class RefToValAST : public BaseAST {
+    public:
+        RefToValAST(unique_ptr<BaseAST> v) : value(move(v)) {}
+        unique_ptr<BaseAST> value;
+
+        void dump() {
+            Print::print("RefToVal (");
+            value->dump();
+            Print::print(")");
+        }
+};
+
+class ValOfRefAST : public BaseAST {
+    public:
+        ValOfRefAST(unique_ptr<BaseAST> v) : value(move(v)) {}
+        unique_ptr<BaseAST> value;
+
+        void dump() {
+            Print::print("ValOfRef (");
+            value->dump();
+            Print::print(")");
+        }
+};
+
 class ExternFncAST : public BaseAST {
     public:
         ExternFncAST(string s, vector<TType> ar, TType r) : name(s), args(ar), ret_type(r) {}

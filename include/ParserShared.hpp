@@ -30,14 +30,26 @@ class TType {
             return res;
         }
 
+        static TType withDeref(shared_ptr<TType> t) {
+            TType res;
+            res.dereferenceTo = t;
+            return res;
+        }
+
         bool isRef() {
             return bool(referenceTo);
+        }
+
+        bool isDeref() {
+            return bool(dereferenceTo);
         }
 
         operator string() const { return get<string>(inner); }
         operator _TType() const { return get<_TType>(inner); }
 
         shared_ptr<TType> referenceTo;
+        shared_ptr<TType> dereferenceTo;
+
         IT inner;
 };
 
@@ -65,6 +77,7 @@ enum class Token {
     Type,
     TypeDef,
     Ref,
+    Val,
     Ret,
     If,
     Else

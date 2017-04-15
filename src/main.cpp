@@ -96,6 +96,8 @@ class CodeGen {
 
         struct LLVMStruct {
             LLVMStruct(vector<pair<string, Type *>> flds, StructType *tp) : fields(flds), type(tp) {}
+            LLVMStruct() {}
+
             StructType *type;
             vector<pair<string, Type *>> fields;
         };
@@ -109,7 +111,7 @@ class CodeGen {
 
         void AST2IR();
         void genCompiledIn();
-        Value *genExpr(unique_ptr<BaseAST> obj);
+        Value *genExpr(unique_ptr<BaseAST> obj, bool noload);
 
         Type *getLLVMType(TType t); // build-in
         Type *getLLVMType(string s); // custom
@@ -153,8 +155,28 @@ Type *CodeGen::getLLVMType(TType t) {
           }, t.inner);
 }
 
-Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
-    if (auto decl = dynamic_cast<DeclAST *>(obj.get())) {
+Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
+    if (auto v = dynamic_cast<ValOfRefAST *>(obj.get())) {
+        if (auto in = dynamic_cast<AssAST *>(v->value.get())) {
+            Value *var;
+            try {
+                var = functions.at(curr_fn_name).variables.at(in->name);
+            }  catch (out_of_range) {
+                throw runtime_error(string("Undefined variable: ") + in->name);
+            }
+
+            Value *value = genExpr(move(in->value));
+
+            Value *pointee = builder->CreateLoad(var);
+            builder->CreateStore(value, pointee);
+
+            return value;
+        } else {
+            return builder->CreateLoad(genExpr(move(v->value)));
+        }
+    } else if (auto r = dynamic_cast<RefToValAST *>(obj.get())) {
+        return genExpr(move(r->value), true);
+    } else if (auto decl = dynamic_cast<DeclAST *>(obj.get())) {
         auto t = getLLVMType(decl->type);
 
         Value *alloc = builder->CreateAlloca(t, nullptr, decl->name);
@@ -178,6 +200,8 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
             Value *v = genExpr(move(ass->value));
 
+            //if (var )
+
             if (v->getType() != var->getType()->getContainedType(0)) // var is always <type>* (alloca type), so we check the type it points to
                 throw runtime_error(string("Invalid type assigned to ") + ass->name);
 
@@ -196,7 +220,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
 
             return builder->CreateRet(retxpr);
         } else {
-            if (functions.at(curr_fn_name).ret_type != FunctionType::get(getLLVMType(_TType::Void), false))
+            if (functions.at(curr_fn_name).ret_type != builder->getVoidTy())
                 throw runtime_error("Can't return nothing from a non-void function");
             return builder->CreateRetVoid();
         }
@@ -274,35 +298,39 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
             throw runtime_error("Unknown custom type: " + st->name);
         }
     } else if (auto st = dynamic_cast<TypeFieldStoreAST  *>(obj.get())) {
+        Value *val;
+
         try {
-            auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
-
-            string type_str;
-            raw_string_ostream rso(type_str);
-            val->getType()->print(rso);
-            string type_name = rso.str();
-            type_name = type_name.substr(1, type_name.length() - 2);
-
-            LLVMStruct s = struct_types.at(type_name);
-
-            auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
-                                                                         if (v.first == st->field_name)
-                                                                             return true;
-                                                                         else
-                                                                             return false;
-                                                                     });
-
-                if (index_i == s.fields.end())
-                    throw runtime_error("Unknown field: " + st->field_name);
-
-                unsigned int index = distance(s.fields.begin(), index_i);
-
-                Value *this_field = builder->CreateStructGEP(s.type, val, index);
-                return builder->CreateStore(genExpr(move(st->value)), this_field);
-
+            val = functions.at(curr_fn_name).variables.at(st->struct_name);
         } catch(out_of_range) {
             throw runtime_error(string("Undefined varible: ") + st->struct_name);
         }
+
+        string type_name = val->getType()->getContainedType(0)->getStructName();
+
+        LLVMStruct s;
+
+        try {
+            s = struct_types.at(type_name);
+        } catch (out_of_range) {
+            throw runtime_error("Undefined custom type: " + type_name);
+        }
+
+        auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
+                                                                     if (v.first == st->field_name)
+                                                                         return true;
+                                                                     else
+                                                                         return false;
+                                                                 });
+
+            if (index_i == s.fields.end())
+                throw runtime_error("Unknown field: " + st->field_name);
+
+            unsigned int index = distance(s.fields.begin(), index_i);
+
+            Value *this_field = builder->CreateStructGEP(s.type, val, index);
+
+            return builder->CreateStore(genExpr(move(st->value)), this_field);
     } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
         try {
             auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
@@ -344,7 +372,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj) {
     } else if (auto v = dynamic_cast<IdentAST *>(obj.get())) {
         try {
             auto val = functions.at(curr_fn_name).variables.at(v->value);
-            return builder->CreateLoad(val);
+            return noload ? val : builder->CreateLoad(val);
         } catch(out_of_range) {
             throw runtime_error(string("Undefined varible: ") + v->value);
         }
@@ -572,6 +600,10 @@ void CodeGen::AST2IR() {
         auto arg = fnc->arg_begin();
         auto fnc_arg = fn->args.begin();
         for (; arg != fnc->arg_end(); arg++, fnc_arg++) {
+            if (arg->getType()->isPointerTy()) {
+                arg->addAttr(Attribute::ByVal);
+            }
+
             Value *alloc = builder->CreateAlloca(getLLVMType(fnc_arg->second), nullptr, fnc_arg->first);
             builder->CreateStore(&*arg, alloc);
             fn_vars.emplace(fnc_arg->first, alloc);

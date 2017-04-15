@@ -124,6 +124,7 @@ TokenInfo TokenStream::getTok() {
     match(IdentStr, "include", Token::Include);
     match(IdentStr, "type", Token::TypeDef);
     match(IdentStr, "ref", Token::Ref);
+    match(IdentStr, "val", Token::Val);
 
     if (any_of(begin(types), end(types), [&](string s) { return s == IdentStr; })) {
         return TokenInfo(Token::Type, IdentStr, symbol, line);
