@@ -306,6 +306,8 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
             throw runtime_error(string("Undefined varible: ") + st->struct_name);
         }
 
+        while (val->getType()->getContainedType(0)->isPointerTy())
+            val = builder->CreateLoad(val);
         string type_name = val->getType()->getContainedType(0)->getStructName();
 
         LLVMStruct s;
@@ -322,24 +324,22 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
                                                                      else
                                                                          return false;
                                                                  });
+        if (index_i == s.fields.end())
+            throw runtime_error("Unknown field: " + st->field_name);
 
-            if (index_i == s.fields.end())
-                throw runtime_error("Unknown field: " + st->field_name);
+        unsigned int index = distance(s.fields.begin(), index_i);
 
-            unsigned int index = distance(s.fields.begin(), index_i);
+        Value *this_field = builder->CreateStructGEP(s.type, val, index);
 
-            Value *this_field = builder->CreateStructGEP(s.type, val, index);
-
-            return builder->CreateStore(genExpr(move(st->value)), this_field);
+        return builder->CreateStore(genExpr(move(st->value)), this_field);
     } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
         try {
             auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
 
-            string type_str;
-            raw_string_ostream rso(type_str);
-            val->getType()->print(rso);
-            string type_name = rso.str();
-            type_name = type_name.substr(1, type_name.length() - 2);
+            Type *tmpt = val->getType();
+            while (tmpt->isPointerTy())
+                tmpt = tmpt->getContainedType(0);
+            string type_name = tmpt->getStructName();
 
             LLVMStruct s = struct_types.at(type_name);
 
@@ -600,10 +600,6 @@ void CodeGen::AST2IR() {
         auto arg = fnc->arg_begin();
         auto fnc_arg = fn->args.begin();
         for (; arg != fnc->arg_end(); arg++, fnc_arg++) {
-            if (arg->getType()->isPointerTy()) {
-                arg->addAttr(Attribute::ByVal);
-            }
-
             Value *alloc = builder->CreateAlloca(getLLVMType(fnc_arg->second), nullptr, fnc_arg->first);
             builder->CreateStore(&*arg, alloc);
             fn_vars.emplace(fnc_arg->first, alloc);
