@@ -655,7 +655,7 @@ unique_ptr<BaseAST> ASTParser::parseTypeFncCall(string st_name) {
 
     getNextTok(); // eat }
 
-    auto res = make_unique<FncCallAST>(name, move(args));
+    auto res = make_unique<FncCallAST>(name, move(args), st_name);
 
     res->args.push_front(make_unique<IdentAST>(st_name));
 
@@ -663,7 +663,7 @@ unique_ptr<BaseAST> ASTParser::parseTypeFncCall(string st_name) {
         return parseOperator(move(res));
     }
 
-    return make_unique<TypeFncCallAST>(st_name, move(res));
+    return move(res);
 }
 
 unique_ptr<BaseAST> ASTParser::parseFncCall() {
