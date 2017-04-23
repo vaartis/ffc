@@ -1,5 +1,6 @@
 #include <sstream>
 #include <map>
+#include <deque>
 #include <iostream>
 #include <memory>
 #include <vector>
@@ -34,6 +35,9 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                     break;
                 case Token::Extern:
                     ext_functions.push_back(parseExternFnc());
+                    break;
+                case Token::Implement:
+                    impls.push_back(parseImplement());
                     break;
                 case Token::Include:
                     includes.push_back(parseInclude());
@@ -88,6 +92,42 @@ TType ASTParser::parseTType() {
     } else {
          throw runtime_error("Expected TYPE at " + to_string(line) + ":" + to_string(symbol));
     }
+}
+
+unique_ptr<ImplementAST> ASTParser::parseImplement() {
+    getNextTok(); // eat implement
+
+    if (/* TODO: Traits */ false) {
+    }
+
+    assert(currTok == Token::For);
+
+    getNextTok();
+
+    assert(if_type(currTok, IdentStr));
+
+    string type = IdentStr;
+
+    getNextTok();
+
+    assert(currTok == Token::OpCB);
+
+    vector<unique_ptr<FncDefAST>> fncs;
+
+    getNextTok();
+
+    while (currTok != Token::ClCB) {
+        assert(currTok == Token::Fnc);
+
+        auto curr_fnc = parseFncDef();
+
+        curr_fnc->args.push_front({"self", type});
+
+        fncs.push_back(move(curr_fnc));
+    }
+    getNextTok();
+
+    return make_unique<ImplementAST>(type, move(fncs));
 }
 
 unique_ptr<BaseAST> ASTParser::parseWhile() {
@@ -265,12 +305,12 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
 }
 
-map<string, TType> ASTParser::parseParams() {
+deque<pair<string, TType>> ASTParser::parseParams() {
     assert(currTok == Token::OpP);
 
     getNextTok(); // eat (
 
-    map <string, TType> args;
+    deque<pair<string, TType>> args;
     while (currTok != Token::ClP) {
         TType tp = parseTType();
 
@@ -278,7 +318,7 @@ map<string, TType> ASTParser::parseParams() {
         string name = IdentStr;
         getNextTok();
 
-        args.insert({name, tp});
+        args.push_back({name, tp});
 
         if (currTok != Token::ClP) {
             assert(currTok == Token::Comma);
@@ -300,7 +340,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
 
     getNextTok();
 
-    map<string, TType> args = parseParams();
+    deque<pair<string, TType>> args = parseParams();
 
     TType ret_type = _TType::Void;
 
@@ -337,7 +377,7 @@ unique_ptr<BaseAST> ASTParser::parseVal() {
         if (tokens.peek().tok == Token::Eq) {
             return make_unique<ValOfRefAST>(parseAss());
         } else if (tokens.peek().tok == Token::Dot) {
-            return make_unique<ValOfRefAST>(parseTypeFieldStore());
+            return make_unique<ValOfRefAST>(parseTypeFieldStore(IdentStr));
         } else {
             return make_unique<ValOfRefAST>(parseExpr());
         }
@@ -369,7 +409,14 @@ unique_ptr<BaseAST> ASTParser::parseStmt() {
     } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
         stmt = parseFncCall();
     } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
-         stmt = parseTypeFieldStore();
+        getNextTok(); // eat name
+        getNextTok(); // eat dot
+
+        if (tokens.peek().tok == Token::OpP) {
+            stmt = parseTypeFncCall(maybe_tmp);
+        } else {
+            stmt = parseTypeFieldStore(maybe_tmp);
+        }
     } else {
         switch (currTok) {
             case Token::Val:
@@ -476,7 +523,16 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
                 if (nxt == Token::OpP) {
                     return parseFncCall();
                 } else if (nxt == Token::Dot) {
-                    return parseTypeFieldLoad();
+                    string type = IdentStr;
+
+                    getNextTok(); // eat type
+                    getNextTok(); // eat dot
+
+                    if (tokens.peek().tok == Token::OpP) {
+                        return parseTypeFncCall(type);
+                    } else {
+                        return parseTypeFieldLoad(type);
+                    }
                 } else {
                     auto res = make_unique<IdentAST>(IdentStr);
                     getNextTok();
@@ -490,12 +546,7 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
     throw runtime_error("Unknown expr");
 }
 
-unique_ptr<BaseAST> ASTParser::parseTypeFieldStore() {
-    string st_name = IdentStr;
-    assert(!if_type(currTok, st_name));
-    getNextTok();
-    assert(currTok == Token::Dot);
-    getNextTok(); // eat dor
+unique_ptr<BaseAST> ASTParser::parseTypeFieldStore(string st_name) {
     string f_name = IdentStr;
     getNextTok();
 
@@ -505,12 +556,7 @@ unique_ptr<BaseAST> ASTParser::parseTypeFieldStore() {
     return make_unique<TypeFieldStoreAST>(st_name, f_name, move(val));
 }
 
-unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad() {
-    string st_name = IdentStr;
-    assert(!if_type(currTok, st_name));
-    getNextTok();
-    assert(currTok == Token::Dot);
-    getNextTok(); // eat dot
+unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad(string st_name) {
     string f_name = IdentStr;
     getNextTok();
 
@@ -589,8 +635,39 @@ unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {
     return make_unique<OperatorAST>(name, move(lhs), move(rhs));
 }
 
+unique_ptr<BaseAST> ASTParser::parseTypeFncCall(string st_name) {
+    deque<unique_ptr<BaseAST>> args;
+
+    assert(if_ident(currTok, IdentStr));
+
+    string name = IdentStr;
+
+    getNextTok(); // eat name
+    getNextTok(); // eat (
+
+    while (currTok != Token::ClP) {
+        args.push_back(parseExpr());
+        if (currTok != Token::ClP) {
+            assert(currTok == Token::Comma);
+            getNextTok();
+        }
+    }
+
+    getNextTok(); // eat }
+
+    auto res = make_unique<FncCallAST>(name, move(args));
+
+    res->args.push_front(make_unique<IdentAST>(st_name));
+
+    if (currTok == Token::Operator) {
+        return parseOperator(move(res));
+    }
+
+    return make_unique<TypeFncCallAST>(st_name, move(res));
+}
+
 unique_ptr<BaseAST> ASTParser::parseFncCall() {
-    vector< unique_ptr<BaseAST> > args;
+    deque<unique_ptr<BaseAST>> args;
 
     assert(if_ident(currTok, IdentStr));
 

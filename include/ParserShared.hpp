@@ -80,5 +80,7 @@ enum class Token {
     Val,
     Ret,
     If,
-    Else
+    Else,
+    Implement,
+    For,
 };

@@ -72,6 +72,7 @@ class CodeGen {
             ops = parser.get_operators();
             incls = parser.get_includes();
             typedefs = parser.get_typedefs();
+            impls = parser.get_impls();
 
             AST2IR();
         }
@@ -85,6 +86,7 @@ class CodeGen {
         vector<unique_ptr<ExternFncAST>> exts;
         vector<unique_ptr<OperatorDefAST>> ops;
         vector<unique_ptr<IncludeAST>> incls;
+        vector<unique_ptr<ImplementAST>> impls;
         map<string, shared_ptr<TypeDefAST>> typedefs;
 
         struct LLVMFn {
@@ -133,7 +135,7 @@ Type *CodeGen::getLLVMType(TType t) {
               if constexpr (is_same_v<_TType, T>) {
                   switch (arg) {
                       case _TType::Int:
-                          return builder->getInt64Ty();
+                          return builder->getInt32Ty();
                       case _TType::Void:
                           return builder->getVoidTy();
                       case _TType::Float:
@@ -332,6 +334,25 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
         Value *this_field = builder->CreateStructGEP(s.type, val, index);
 
         return builder->CreateStore(genExpr(move(st->value)), this_field);
+    } else if (auto f = dynamic_cast<TypeFncCallAST *>(obj.get())) {
+        Value *val;
+
+        try {
+            val = functions.at(curr_fn_name).variables.at(f->name);
+        } catch(out_of_range) {
+            throw runtime_error(string("Undefined varible: ") + f->name);
+        }
+
+        Type *tmpt = val->getType();
+        while (tmpt->isPointerTy())
+            tmpt = tmpt->getContainedType(0);
+        string type_name = tmpt->getStructName();
+
+        auto &fn = f->fnc;
+
+        fn->name = type_name + "::" + fn->name;
+
+        return genExpr(move(fn));
     } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
         try {
             auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
@@ -579,6 +600,42 @@ void CodeGen::AST2IR() {
         StructType *type = StructType::create(decl_els, st.first);
 
         struct_types.emplace(st.first, LLVMStruct(els, type));
+    }
+
+    for (auto &i : this->impls) {
+        for (auto &fn : i->fncs) {
+            cout << "Emiting " << fname << "::" << i->type << "::" << fn->name << endl;
+
+            fn->name = i->type + "::" + fn->name;
+
+            curr_fn_name = fn->name;
+
+            vector<Type *> fn_args;
+            map<string, Value *> fn_vars;
+
+            for (auto &ar : fn->args)
+                fn_args.push_back(getLLVMType(ar.second));
+
+            FunctionType *tp = FunctionType::get(getLLVMType(fn->ret_type), fn_args, false);
+            Function *fnc = Function::Create(tp, Function::ExternalLinkage, fn->name, module.get());
+
+            BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
+            builder->SetInsertPoint(enter);
+
+            auto arg = fnc->arg_begin();
+            auto fnc_arg = fn->args.begin();
+            for (; arg != fnc->arg_end(); arg++, fnc_arg++) {
+                Value *alloc = builder->CreateAlloca(getLLVMType(fnc_arg->second), nullptr, fnc_arg->first);
+                builder->CreateStore(&*arg, alloc);
+                fn_vars.emplace(fnc_arg->first, alloc);
+            }
+
+            functions.emplace(fn->name, LLVMFn(fnc, fn_vars, getLLVMType(fn->ret_type)));
+
+            for (auto &expr : fn->body) {
+                genExpr(move(expr));
+            }
+        }
     }
 
     for (auto &fn : this->ast) {

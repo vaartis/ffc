@@ -30,6 +30,7 @@ class ASTParser {
         gen_getter(ExternFncAST, ext_functions);
         gen_getter(OperatorDefAST, operators);
         gen_getter(IncludeAST, includes);
+        gen_getter(ImplementAST, impls);
         map<string, std::shared_ptr<TypeDefAST>> get_typedefs() {return typedefs; }
 
     private:
@@ -45,6 +46,7 @@ class ASTParser {
         vector<unique_ptr<ExternFncAST>> ext_functions;
         vector<unique_ptr<OperatorDefAST>> operators;
         vector<unique_ptr<IncludeAST>> includes;
+        vector<unique_ptr<ImplementAST>> impls;
         map<string, std::shared_ptr<TypeDefAST>> typedefs;
 
         Token getNextTok();
@@ -56,13 +58,14 @@ class ASTParser {
         unique_ptr<FncDefAST> parseFncDef();
         unique_ptr<ExternFncAST> parseExternFnc();
         unique_ptr<OperatorDefAST> parseOperatorDef();
+        unique_ptr<ImplementAST> parseImplement();
         void parseTypeDef();
 
-        #define gen_parse(wh) unique_ptr<BaseAST> parse##wh();
+        #define gen_parse(wh, ...) unique_ptr<BaseAST> parse##wh(__VA_ARGS__);
 
-        map<string, TType> parseParams();
+        deque<pair<string, TType>> parseParams();
 
-        unique_ptr<BaseAST> parseVar(TType t);
+        gen_parse(Var, TType);
         gen_parse(Ass);
 
         gen_parse(IntLiteral);
@@ -70,8 +73,11 @@ class ASTParser {
         gen_parse(BoolLiteral);
         gen_parse(StrLiteral);
 
-        gen_parse(TypeFieldStore);
-        gen_parse(TypeFieldLoad);
+
+        gen_parse(TypeFieldStore, string);
+        gen_parse(TypeFieldLoad, string);
+        gen_parse(TypeFncCall, string);
+
         gen_parse(Type);
         gen_parse(Stmt);
         gen_parse(Val);
@@ -81,5 +87,5 @@ class ASTParser {
         gen_parse(If);
         gen_parse(While);
 
-        unique_ptr<BaseAST> parseOperator(unique_ptr<BaseAST> lhs);
+        gen_parse(Operator, unique_ptr<BaseAST>);
 };

@@ -7,7 +7,9 @@ module ::= <include>
          | <fnc-def>
          | <extern>
          | <operator-def>
+         | <implement>
          ;
+implement = 'implement' 'for' <type> '{' <fncdef>* '}'
 type = ('val' | 'ref')* <built-in> | <ident> ; buill-in are str,int etc.
 include ::= 'include' <string-literal> <string-literal>* ';'
 type-def ::= 'type' <ident> '{' ( <type> <ident> ',' )+ '}'

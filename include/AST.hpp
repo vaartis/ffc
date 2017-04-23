@@ -3,12 +3,14 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <deque>
 #include <iostream>
 
 using std::string;
 using std::unique_ptr;
 using std::map;
 using std::vector;
+using std::deque;
 using std::pair;
 using std::ostream;
 using std::cout;
@@ -292,12 +294,13 @@ class BoolAST : public BaseAST {
         }
 };
 
+// Deque is needed to insert implicit type param with implements
 class FncDefAST : public BaseAST {
     public:
-        FncDefAST(string nm, map<string, TType> ar, TType ret_t, vector< unique_ptr<BaseAST> > bd) : name(nm), args(ar), ret_type(ret_t), body(move(bd)) {}
+        FncDefAST(string nm, deque<pair<string, TType>> ar, TType ret_t, vector< unique_ptr<BaseAST> > bd) : name(nm), args(ar), ret_type(ret_t), body(move(bd)) {}
 
         string name;
-        map<string, TType> args;
+        deque<pair<string, TType>> args;
         vector< unique_ptr<BaseAST> > body;
         TType ret_type;
 
@@ -307,7 +310,7 @@ class FncDefAST : public BaseAST {
             OFFSET++;
 
             for (auto &a : args) {
-                Print::print(&a.first);
+                Print::print(a.first);
             }
 
             OFFSET--;
@@ -321,6 +324,28 @@ class FncDefAST : public BaseAST {
             }
 
             OFFSET--;
+        }
+};
+
+
+class ImplementAST : public BaseAST {
+    public:
+        ImplementAST(string t, vector<unique_ptr<FncDefAST>> f) : type(t), fncs(move(f)) {}
+        string type;
+        vector<unique_ptr<FncDefAST>> fncs;
+
+        void dump() {
+            Print::print("ImplementAST (", type, ") {");
+
+            OFFSET++;
+
+            for (auto &f : fncs) {
+                f->dump();
+            }
+
+            OFFSET--;
+
+            Print::print("}");
         }
 };
 
@@ -363,10 +388,10 @@ class ExternFncAST : public BaseAST {
 
 class FncCallAST : public BaseAST {
     public:
-        FncCallAST(string nm, vector< unique_ptr<BaseAST> > ar) : name(nm), args(move(ar)) {}
+        FncCallAST(string nm, deque<unique_ptr<BaseAST>> ar) : name(nm), args(move(ar)) {}
 
         string name;
-        vector< unique_ptr<BaseAST> > args;
+        deque<unique_ptr<BaseAST>> args;
 
         void dump() {
             Print::print("FncCall (", name, ")", "(");
@@ -380,6 +405,25 @@ class FncCallAST : public BaseAST {
             OFFSET--;
 
             Print::print(")");
+        }
+};
+
+class TypeFncCallAST : public BaseAST {
+    public:
+        TypeFncCallAST(string nm, unique_ptr<FncCallAST> f) : name(nm), fnc(move(f)) {}
+        string name;
+        unique_ptr<FncCallAST> fnc;
+
+        void dump() {
+            Print::print("FncCallAST {");
+
+            OFFSET++;
+
+            fnc->dump();
+
+            OFFSET--;
+
+            Print::print("}");
         }
 };
 
@@ -443,7 +487,8 @@ class RetAST : public BaseAST {
 
             OFFSET++;
 
-            value->dump();
+            if (value != nullptr)
+                value->dump();
 
             OFFSET--;
 
