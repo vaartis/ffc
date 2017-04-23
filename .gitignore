@@ -3,6 +3,7 @@ cmake_install.cmake
 CMakeCache.txt
 Makefile
 ffc
+run_tests
 *.ll
 *.ff
 src/.*
