@@ -124,6 +124,8 @@ unique_ptr<ImplementAST> ASTParser::parseImplement() {
         curr_fnc->args.push_front({"self", type});
 
         fncs.push_back(move(curr_fnc));
+
+        getNextTok();
     }
     getNextTok();
 

@@ -83,6 +83,8 @@ class CodeGen {
         string fname;
 
         vector<unique_ptr<FncDefAST>> ast;
+        vector<string> real_names;
+
         vector<unique_ptr<ExternFncAST>> exts;
         vector<unique_ptr<OperatorDefAST>> ops;
         vector<unique_ptr<IncludeAST>> incls;
@@ -661,6 +663,12 @@ void CodeGen::AST2IR() {
 
     for (auto &i : this->impls) {
         for (auto &fn : i->fncs) {
+            if (find(real_names.begin(), real_names.end(), i->type + "::" + fn->name) == real_names.end())
+                real_names.push_back(i->type + "::" + fn->name);
+            else
+                throw runtime_error("Redifinition of a function: " + i->type + "::" + fn->name);
+
+
             fn->name = mangle(fn.get(), i->type);
 
             curr_fn_name = fn->name;
@@ -694,6 +702,11 @@ void CodeGen::AST2IR() {
     }
 
     for (auto &fn : this->ast) {
+        if (find(real_names.begin(), real_names.end(), fn->name) == real_names.end())
+            real_names.push_back(fn->name);
+        else
+            throw runtime_error("Redifinition of a function: " + fn->name);
+
         if (fn->name != "main") {
             fn->name = mangle(fn.get());
         }
