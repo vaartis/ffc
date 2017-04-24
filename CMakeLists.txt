@@ -11,7 +11,7 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++1z -g -Wimplicit-fallthrough")
 if(test)
   find_package(GTest REQUIRED)
 
-  file(GLOB tests_SRC "test/*.cpp")
+  file(GLOB tests_SRC "test/*/*.cpp")
 
   add_executable(run_tests ${tests_SRC} "src/ASTParser.cpp" "src/TokenStream.cpp")
 
