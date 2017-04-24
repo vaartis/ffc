@@ -505,21 +505,46 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
 
         Value *c = builder->CreateCondBr(cond, then, els);
 
+        Value *if_val, *else_val;
+
+        // then
+
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(then);
         builder->SetInsertPoint(then);
         for (auto &v : ifb->body)
             genExpr(move(v));
+
+        if (ifb->value != nullptr) {
+            assert(ifb->else_value != nullptr);
+            if_val = genExpr(move(ifb->value));
+        }
         builder->CreateBr(ifend);
 
+        // else
+
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(els);
+
         builder->SetInsertPoint(els);
         for (auto &v : ifb->else_body)
             genExpr(move(v));
+
+        if (ifb->else_value != nullptr) {
+            else_val = genExpr(move(ifb->else_value));
+            assert(if_val->getType() == else_val->getType());
+        }
+
         builder->CreateBr(ifend);
 
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
         builder->SetInsertPoint(ifend);
 
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
+        if (if_val != nullptr) {
+                PHINode *if_res = builder->CreatePHI(if_val->getType(), 2, "if.expr.res");
+                if_res->addIncoming(if_val, then);
+                if_res->addIncoming(else_val, els);
+
+                return if_res;
+        }
 
         return cond;
     }

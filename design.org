@@ -25,8 +25,8 @@ statement ::= <variable>
             | <fnc-call>
             | <type-field-store>
             | <ret>
-            | <if>
             | <while>
+            | <expr>
             ;
 
 variable ::= <var-create> | <var-assign> ';'
@@ -35,7 +35,6 @@ var-assign ::= <ident> '=' <expr> ';'
 
 type-field-store ::= <ident> '.' <ident> '=' <expr> ';'
 ret ::= 'ret' <expr> ';'
-if ;:= 'if' <bool-expr> '{' <stmt>* '}' ( 'else' '{' <stmt>* '}' )*
 while ::= 'while' <bool-expr> '{' <stmt>* '}'
 #+END_SRC
 
@@ -52,6 +51,9 @@ expr ::= <int-literal>
        | <type-literal>
        | <val>
        | <ref>
+       | <if>
+       ;
+if ;:= 'if' <bool-expr> '{' <stmt>* <stmt>? '}' ( 'else' '{' <stmt>* <stmt>? '}' )*
 val ::= 'val' <expr>
 ref ;:= 'ref' <expr>
 int-literal ::= 0-9+

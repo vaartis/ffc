@@ -79,7 +79,7 @@ class ASTParser {
         gen_parse(TypeFncCall, string);
 
         gen_parse(Type);
-        gen_parse(Stmt);
+        gen_parse(Stmt, bool);
         gen_parse(Val);
         gen_parse(FncCall);
         gen_parse(Expr);

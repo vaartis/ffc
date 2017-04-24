@@ -94,6 +94,68 @@ TType ASTParser::parseTType() {
     }
 }
 
+// There are cases where we need to check semicolon explicitly, e.g. "if"
+unique_ptr<BaseAST> ASTParser::parseStmt(bool test_semicolon = true) {
+    auto cTok = currTok;
+    auto nTok = tokens.peek().tok;
+
+    string maybe_tmp = IdentStr;
+    string maybe_tmp2 = tokens.peek().IdentStr;
+
+    bool skip_sm = false;
+
+    unique_ptr<BaseAST> stmt;
+
+    if (if_type(cTok, maybe_tmp)) {
+        TType t = parseTType();
+
+        if (!if_ident(currTok, IdentStr))
+            throw runtime_error("Expected IDENT at " + to_string(line) + ":" + to_string(symbol));
+
+        stmt = parseVar(t);
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Eq) {
+        stmt = parseAss();
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
+        stmt = parseFncCall();
+    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
+        getNextTok(); // eat name
+        getNextTok(); // eat dot
+
+        if (tokens.peek().tok == Token::OpP) {
+            stmt = parseTypeFncCall(maybe_tmp);
+        } else {
+            stmt = parseTypeFieldStore(maybe_tmp);
+        }
+    } else {
+        switch (currTok) {
+            case Token::Val:
+                stmt = parseVal();
+                break;
+            case Token::Ret:
+                stmt = parseRet();
+                break;
+            case Token::While:
+                skip_sm = true;
+                stmt = parseWhile();
+                break;
+            default:
+                if (currTok == Token::If || currTok == Token::Else)
+                    skip_sm = true;
+                stmt = parseExpr();
+                break;
+        }
+    }
+
+    if (!skip_sm) {
+        if (test_semicolon && currTok != Token::Semicolon)
+            throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
+        else if (test_semicolon)
+            getNextTok();
+    }
+
+    return move(stmt);
+}
+
 unique_ptr<ImplementAST> ASTParser::parseImplement() {
     getNextTok(); // eat implement
 
@@ -388,67 +450,6 @@ unique_ptr<BaseAST> ASTParser::parseVal() {
     }
 }
 
-unique_ptr<BaseAST> ASTParser::parseStmt() {
-    auto cTok = currTok;
-    auto nTok = tokens.peek().tok;
-
-    string maybe_tmp = IdentStr;
-    string maybe_tmp2 = tokens.peek().IdentStr;
-
-    bool skip_sm = false;
-
-    unique_ptr<BaseAST> stmt;
-
-    if (if_type(cTok, maybe_tmp)) {
-        TType t = parseTType();
-
-        if (!if_ident(currTok, IdentStr))
-            throw runtime_error("Expected IDENT at " + to_string(line) + ":" + to_string(symbol));
-
-        stmt = parseVar(t);
-    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Eq) {
-        stmt = parseAss();
-    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::OpP) {
-        stmt = parseFncCall();
-    } else if (if_ident(cTok, maybe_tmp) && nTok == Token::Dot) {
-        getNextTok(); // eat name
-        getNextTok(); // eat dot
-
-        if (tokens.peek().tok == Token::OpP) {
-            stmt = parseTypeFncCall(maybe_tmp);
-        } else {
-            stmt = parseTypeFieldStore(maybe_tmp);
-        }
-    } else {
-        switch (currTok) {
-            case Token::Val:
-                stmt = parseVal();
-                break;
-            case Token::Ret:
-                stmt = parseRet();
-                break;
-            case Token::If:
-                skip_sm = true;
-                stmt = parseIf();
-                break;
-            case Token::While:
-                skip_sm = true;
-                stmt = parseWhile();
-                break;
-            default:
-                throw runtime_error("Parsing failed: " + IdentStr);
-        }
-    }
-
-    if (!skip_sm) {
-        if (currTok != Token::Semicolon)
-            throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
-        getNextTok();
-    }
-
-    return move(stmt);
-}
-
 // if ::= if <expr> { <stmt>* }
 unique_ptr<BaseAST> ASTParser::parseIf() {
     getNextTok(); // eat if
@@ -457,16 +458,32 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
 
     assert(currTok == Token::OpCB);
 
-    vector< unique_ptr<BaseAST> > body;
-    vector< unique_ptr<BaseAST> > else_body;
+    vector<unique_ptr<BaseAST>> body;
+    vector<unique_ptr<BaseAST>> else_body;
+
+    unique_ptr<BaseAST> value = nullptr, else_value = nullptr;
 
     getNextTok(); // eat {
 
     while (currTok != Token::ClCB) {
-        body.push_back(parseStmt());
+        auto res = parseStmt(false);
+
+        if (currTok == Token::ClCB) {
+            value = move(res);
+            break;
+        } else if (currTok == Token::Semicolon) {
+            body.push_back(move(res));
+            getNextTok();
+        } else {
+            throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
+        }
     }
 
     getNextTok(); // eat } or get to else
+
+    if (value != nullptr && currTok != Token::Else) {
+        throw runtime_error("If expression returning value must have an else branch");
+    }
 
     if (currTok == Token::Else) {
         getNextTok(); // eat else
@@ -476,12 +493,22 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
         getNextTok(); // eat {
 
         while (currTok != Token::ClCB) {
-            else_body.push_back(parseStmt());
+            auto res = parseStmt(false);
+
+            if (currTok == Token::ClCB) {
+                else_value = move(res);
+                break;
+            } else if (currTok == Token::Semicolon) {
+                else_body.push_back(move(res));
+                getNextTok();
+            } else {
+                throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
+            }
         }
         getNextTok(); // eat }
     }
 
-    return make_unique<IfAST>(move(cond), move(body), move(else_body));
+    return make_unique<IfAST>(move(cond), move(body), move(else_body), move(value), move(else_value));
 }
 
 unique_ptr<BaseAST> ASTParser::parseExpr() {
@@ -542,6 +569,8 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
                 }
             } else if (if_type(currTok, IdentStr) && currTok != Token::Ref) {
                 return parseType();
+            } else if (currTok == Token::If) {
+                return parseIf();
             }
     }
 
