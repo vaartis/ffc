@@ -7,3 +7,4 @@ run_tests
 *.ll
 *.ff
 src/.*
+doc

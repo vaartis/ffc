@@ -13,6 +13,7 @@ using std::vector;
 using std::stringstream;
 using std::unique_ptr;
 
+/** Info about AST token. */
 struct TokenInfo {
     public:
         TokenInfo(Token t, string i, long x, long y) : tok(t), IdentStr(i), symbol(x), line(y) {}
@@ -21,10 +22,12 @@ struct TokenInfo {
         struct { long symbol; long line; };
 };
 
+/** Stream-like class for AST tokens */
 class TokenStream {
     public:
         TokenStream(string s);
 
+        /** End of file */
         struct EOFException : exception {};
 
         char getChar();

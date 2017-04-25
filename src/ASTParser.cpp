@@ -13,6 +13,7 @@
 
 using namespace std;
 
+/** Get next token from a token stream. */
 Token ASTParser::getNextTok() {
     TokenInfo r = tokens.get();
     IdentStr = r.IdentStr;
@@ -23,6 +24,7 @@ Token ASTParser::getNextTok() {
 
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
     types = tokens.getTypes();
+    currTok = Token::None;
     while (true) {
         try {
             getNextTok();
@@ -54,6 +56,7 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
     }
 }
 
+/** Checks if provided string is a custom type. */
 bool ASTParser::isType(string s) {
     if (any_of(begin(types), end(types), [&](string c) { return c == s; })) {
         return true;
@@ -69,6 +72,7 @@ bool ASTParser::isType(string s) {
 #define if_type(t, s) (t == Token::Type || t == Token::Ref || isType(s))
 #define if_ident(t, s) (t == Token::Ident && !isType(s))
 
+/** Parse type at current position. */
 TType ASTParser::parseTType() {
     if (if_type(currTok, IdentStr) && currTok != Token::Ref) {
         string s = IdentStr;
@@ -94,8 +98,10 @@ TType ASTParser::parseTType() {
     }
 }
 
-// There are cases where we need to check semicolon explicitly, e.g. "if"
-unique_ptr<BaseAST> ASTParser::parseStmt(bool test_semicolon = true) {
+/** Parses statements, this includes expressions when thir value is discarded. */
+unique_ptr<BaseAST> ASTParser::parseStmt(bool test_semicolon = true /** There are cases where we need
+                                                                     * to check semicolon explicitly, e.g. ASTParser::parseIf()
+                                                                     */) {
     auto cTok = currTok;
     auto nTok = tokens.peek().tok;
 
@@ -156,6 +162,7 @@ unique_ptr<BaseAST> ASTParser::parseStmt(bool test_semicolon = true) {
     return move(stmt);
 }
 
+/** Parses function implementation for types */
 unique_ptr<ImplementAST> ASTParser::parseImplement() {
     getNextTok(); // eat implement
 
@@ -194,6 +201,7 @@ unique_ptr<ImplementAST> ASTParser::parseImplement() {
     return make_unique<ImplementAST>(type, move(fncs));
 }
 
+/** Parse while loop */
 unique_ptr<BaseAST> ASTParser::parseWhile() {
     getNextTok(); // eat while
     unique_ptr<BaseAST> cond = parseExpr();
@@ -212,6 +220,7 @@ unique_ptr<BaseAST> ASTParser::parseWhile() {
     return make_unique<WhileAST>(move(cond), move(body));
 }
 
+/** Parses type definition. */
 void ASTParser::parseTypeDef() {
     getNextTok(); // eat type token
     assert(if_ident(currTok, IdentStr));
@@ -242,7 +251,7 @@ void ASTParser::parseTypeDef() {
     typedefs.emplace(name, make_shared<TypeDefAST>(name, fields));
 }
 
-/// include = include <string literal> <string literal>*
+/** Parses includes. */
 unique_ptr<IncludeAST> ASTParser::parseInclude() {
     getNextTok(); // eat include
     assert(currTok == Token::StrLit);
@@ -256,26 +265,28 @@ unique_ptr<IncludeAST> ASTParser::parseInclude() {
     return make_unique<IncludeAST>(mods);
 }
 
-/// str ::= "char+"
+/** Parses string literals. */
 unique_ptr<BaseAST> ASTParser::parseStrLiteral() {
     auto res = make_unique<StrAST>(IdentStr);
     getNextTok();
     return move(res);
 }
 
-/// number ::= <number>
+/** Parses integer literals. */
 unique_ptr<BaseAST> ASTParser::parseIntLiteral() {
     auto res = make_unique<IntAST>(stoi(IdentStr));
     getNextTok();
     return move(res);
 }
 
+/** Parses floating pointer number literals. */
 unique_ptr<BaseAST> ASTParser::parseFloatLiteral() {
     auto res = make_unique<FloatAST>(stof(IdentStr));
     getNextTok();
     return move(res);
 }
 
+/** Parses boolean literals. */
 unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
     bool b = (IdentStr == "true") ? true : false;
     auto res = make_unique<BoolAST>(b);
@@ -284,6 +295,7 @@ unique_ptr<BaseAST> ASTParser::parseBoolLiteral() {
     return move(res);
 }
 
+/** Parses function externs. */
 unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     getNextTok(); // eat extern
 
@@ -324,6 +336,7 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
     return res;
 }
 
+/** Parses operator definition. */
 unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     getNextTok(); // eat operator
 
@@ -369,6 +382,7 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
     return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
 }
 
+/** Parse function's parameters. */
 deque<pair<string, TType>> ASTParser::parseParams() {
     assert(currTok == Token::OpP);
 
@@ -395,6 +409,7 @@ deque<pair<string, TType>> ASTParser::parseParams() {
     return args;
 }
 
+/** Parses function definition. */
 unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     getNextTok(); // eat fnc
 
@@ -426,6 +441,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     return res;
 }
 
+/** Parses function's return statements. */
 unique_ptr<BaseAST> ASTParser::parseRet() {
     getNextTok(); // eat ret
 
@@ -435,6 +451,7 @@ unique_ptr<BaseAST> ASTParser::parseRet() {
         return make_unique<RetAST>(nullptr);
 }
 
+/** Parses pointer dereferencing. */
 unique_ptr<BaseAST> ASTParser::parseVal() {
     getNextTok(); // eat val
     if (currTok == Token::Ident) {
@@ -450,6 +467,10 @@ unique_ptr<BaseAST> ASTParser::parseVal() {
     }
 }
 
+/** Parse blocks that can return value.
+ *
+ * This function returns body of a block and optionally it's result (or nullptr if none)
+ */
 pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> ASTParser::parseBlock() {
     assert(currTok == Token::OpCB);
 
@@ -486,7 +507,7 @@ pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> ASTParser::parseBlock() {
     return {move(body), move(value)};
 }
 
-// if ::= if <expr> { <stmt>* }
+/** Parse if (and else). */
 unique_ptr<BaseAST> ASTParser::parseIf() {
     getNextTok(); // eat if
 
@@ -513,6 +534,7 @@ unique_ptr<BaseAST> ASTParser::parseIf() {
     return make_unique<IfAST>(move(cond), move(body), move(else_body), move(value), move(else_value));
 }
 
+/** Parse expressions. */
 unique_ptr<BaseAST> ASTParser::parseExpr() {
     static bool parsing_op = false;
 
@@ -579,7 +601,8 @@ unique_ptr<BaseAST> ASTParser::parseExpr() {
     throw runtime_error("Unknown expr");
 }
 
-unique_ptr<BaseAST> ASTParser::parseTypeFieldStore(string st_name) {
+/** Parse type field storing. */
+unique_ptr<BaseAST> ASTParser::parseTypeFieldStore(string st_name /**< Instance name */) {
     string f_name = IdentStr;
     getNextTok();
 
@@ -589,7 +612,8 @@ unique_ptr<BaseAST> ASTParser::parseTypeFieldStore(string st_name) {
     return make_unique<TypeFieldStoreAST>(st_name, f_name, move(val));
 }
 
-unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad(string st_name) {
+/**Parse type field loading. */
+unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad(string st_name /**< Instance name */) {
     string f_name = IdentStr;
     getNextTok();
 
@@ -602,6 +626,7 @@ unique_ptr<BaseAST> ASTParser::parseTypeFieldLoad(string st_name) {
     return res;
 }
 
+/** Parse in-place type instance creationg. */
 unique_ptr<BaseAST> ASTParser::parseType() {
     string name = IdentStr;
     getNextTok();
@@ -627,7 +652,7 @@ unique_ptr<BaseAST> ASTParser::parseType() {
     return make_unique<TypeAST>(name, move(fields));
 }
 
-// var ::= <type>* <literal> ( '=' <expr> )* ';'
+/** Parse variable creation. */
 unique_ptr<BaseAST> ASTParser::parseVar(TType t) {
     assert(if_ident(currTok, IdentStr));
 
@@ -646,6 +671,7 @@ unique_ptr<BaseAST> ASTParser::parseVar(TType t) {
     throw runtime_error("Failed variable parse at " + to_string(line) + ":" + to_string(symbol));
 }
 
+/** Parse variable assignment. */
 unique_ptr<BaseAST> ASTParser::parseAss() {
     assert(if_ident(currTok, IdentStr));
 
@@ -660,6 +686,7 @@ unique_ptr<BaseAST> ASTParser::parseAss() {
     return make_unique<AssAST>(name, parseExpr());
 }
 
+/** Parse operator usage. */
 unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {
     string name = IdentStr;
     getNextTok(); // eat op
@@ -668,6 +695,7 @@ unique_ptr<BaseAST> ASTParser::parseOperator(unique_ptr<BaseAST> lhs) {
     return make_unique<OperatorAST>(name, move(lhs), move(rhs));
 }
 
+/** Parse type's method call */
 unique_ptr<BaseAST> ASTParser::parseTypeFncCall(string st_name) {
     deque<unique_ptr<BaseAST>> args;
 
@@ -699,6 +727,7 @@ unique_ptr<BaseAST> ASTParser::parseTypeFncCall(string st_name) {
     return move(res);
 }
 
+/** Parse function call*/
 unique_ptr<BaseAST> ASTParser::parseFncCall() {
     deque<unique_ptr<BaseAST>> args;
 

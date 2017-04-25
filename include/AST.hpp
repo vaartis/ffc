@@ -19,6 +19,11 @@ using std::endl;
 unsigned static int OFFSET = 0;
 static bool WAS_O = false;
 
+/** Offset-aware text printer.
+ *
+ * This class prints text to stdout and exists just for debugging purposes
+ * It prints text with an offset, which should be set in AST node's BaseAST::dump() method
+ */
 class Print {
     public:
         static void print() {
@@ -36,29 +41,42 @@ class Print {
         }
 };
 
+/** Base class for AST nodes.
+*/
 class BaseAST {
     public:
-        virtual ~BaseAST() {}
-        virtual void dump() = 0; // Dump element to stdin
+        /** Dump element to stdout.
+         */
+        virtual void dump() = 0;
 };
 
+/** Represents a callable node.
+ */
 class Call {
     public:
-        virtual ~Call() {}
+        /** Get name of this node. */
         virtual string getName() = 0;
+
+        /** Get arguments of this callable node. */
         virtual deque<pair<string, TType>> getArgs() = 0;
+
+        /** Type of node, `F` for function, `O` for operator. */
         virtual char getType() = 0;
 };
 
+/** Represents a block that can hold a value. */
 class Block {
     public:
-        virtual ~Block() {}
+        /** True, if this block returns some value */
         virtual bool hasValue() = 0;
 };
 
+/** While loop AST node. */
 class WhileAST : public BaseAST {
     public:
-        WhileAST(unique_ptr<BaseAST> c, vector<unique_ptr<BaseAST>> b) : cond(move(c)), body(move(b))  {}
+        WhileAST(unique_ptr<BaseAST> c, /**< Condition */
+                 vector<unique_ptr<BaseAST>> b /**< While loop body */
+                 ) : cond(move(c)), body(move(b))  {}
         unique_ptr<BaseAST> cond;
         vector<unique_ptr<BaseAST>> body;
 
@@ -84,9 +102,12 @@ class WhileAST : public BaseAST {
         }
 };
 
+/** Type definition AST node. */
 class TypeDefAST : public BaseAST {
     public:
-        TypeDefAST(string nm, vector<pair<string, TType>> vals) : name(nm), fields(vals) {}
+        TypeDefAST(string nm, /**< Type name */
+                   vector<pair<string, TType>> vals /**< Type fields, vector is used because order of the arguments is important */
+                   ) : name(nm), fields(vals) {}
         string name;
         vector<pair<string, TType>> fields;
 
@@ -103,9 +124,13 @@ class TypeDefAST : public BaseAST {
         }
 };
 
+/** AST node that represents storing a value into type's field. */
 class TypeFieldStoreAST : public BaseAST {
     public:
-    TypeFieldStoreAST(string s_n, string f_n, unique_ptr<BaseAST> v) : struct_name(s_n), field_name(f_n), value(move(v)) {}
+        TypeFieldStoreAST(string s_n, /**< Instance name */
+                          string f_n, /**< Field name*/
+                          unique_ptr<BaseAST> v /**< Value */
+                          ) : struct_name(s_n), field_name(f_n), value(move(v)) {}
         string struct_name;
         string field_name;
         unique_ptr<BaseAST> value;
@@ -121,9 +146,12 @@ class TypeFieldStoreAST : public BaseAST {
         }
 };
 
+/** AST node that represents loading a value from type's field. */
 class TypeFieldLoadAST : public BaseAST {
     public:
-        TypeFieldLoadAST(string st_n, string f_n) : struct_name(st_n), field_name(f_n) {}
+        TypeFieldLoadAST(string st_n, /**< Instance name */
+                         string f_n /**< Field name */
+                         ) : struct_name(st_n), field_name(f_n) {}
         string struct_name;
         string field_name;
 
@@ -132,9 +160,12 @@ class TypeFieldLoadAST : public BaseAST {
         }
 };
 
+/** This node represents in-place creation of a type instance */
 class TypeAST : public BaseAST {
     public:
-        TypeAST(string nm, map<string, unique_ptr<BaseAST>> flds) : name(nm), fields(move(flds)) {}
+        TypeAST(string nm, /**< Type name */
+                map<string, unique_ptr<BaseAST>> flds /**< Names of fields and their values, order is not important here */
+                ) : name(nm), fields(move(flds)) {}
         string name;
         map<string, unique_ptr<BaseAST>> fields;
 
@@ -160,9 +191,11 @@ class TypeAST : public BaseAST {
         }
 };
 
+/** This node represents one or more includes. */
 class IncludeAST : public BaseAST {
     public:
-        IncludeAST(vector<string> mod) : modules(mod) {}
+        IncludeAST(vector<string> mod /**< List of includes */
+                   ) : modules(mod) {}
         vector<string> modules;
 
         void dump() {
@@ -180,9 +213,15 @@ class IncludeAST : public BaseAST {
         }
 };
 
+/** Node that represents definition of an operator. */
 class OperatorDefAST : public BaseAST, public Call {
     public:
-        OperatorDefAST(string nm, pair<string, TType> l, pair<string, TType> r, TType t, vector<unique_ptr<BaseAST>> bd) : name(nm), lhs(l), rhs(r), ret_type(t), body(move(bd)) {}
+        OperatorDefAST(string nm, /**< Operator name, e.g. `+-!` */
+                       pair<string, TType> l, /**< Name and type of LHS */
+                       pair<string, TType> r, /**< Name and type of RHS */
+                       TType t, /**< Return type */
+                       vector<unique_ptr<BaseAST>> bd /**< Function body */
+                       ) : name(nm), lhs(l), rhs(r), ret_type(t), body(move(bd)) {}
 
         string name;
         pair<string, TType> lhs;
@@ -206,9 +245,13 @@ class OperatorDefAST : public BaseAST, public Call {
         char getType() { return 'O'; }
 };
 
+/** AST node that represents usage of an operator */
 class OperatorAST : public BaseAST {
     public:
-        OperatorAST(string nm, unique_ptr<BaseAST> l, unique_ptr<BaseAST> r) : name(nm), lhs(move(l)), rhs(move(r)) {}
+        OperatorAST(string nm, /**< Operator name, e.g. `+-` */
+                    unique_ptr<BaseAST> l, /**< Value of LHS */
+                    unique_ptr<BaseAST> r /**< Value of RHS */
+                    ) : name(nm), lhs(move(l)), rhs(move(r)) {}
         string name;
         unique_ptr<BaseAST> lhs;
         unique_ptr<BaseAST> rhs;
@@ -225,11 +268,20 @@ class OperatorAST : public BaseAST {
         }
 };
 
+/** Node that represents if (and optionally else) branch.
+ *
+ * Note, that `if` is an expression and therefore can return something,
+ * compiler checks if it does and forces users to write an else branch.
+ * Value can be returned by ommiting the semicolon after the last expression in if/else block
+ */
 class IfAST : public BaseAST, public Block {
     public:
-        IfAST(unique_ptr<BaseAST> c, vector<unique_ptr<BaseAST>> bd, vector<unique_ptr<BaseAST>> el,
-              unique_ptr<BaseAST> v, unique_ptr<BaseAST> ev) : cond(move(c)), body(move(bd)),
-                                                                                   else_body(move(el)), value(move(v)), else_value(move(ev)) {}
+        IfAST(unique_ptr<BaseAST> c, /**< Condition */
+              vector<unique_ptr<BaseAST>> bd, /**< `If` branch body */
+              vector<unique_ptr<BaseAST>> el, /**< `Else` branch body*/
+              unique_ptr<BaseAST> v, /**< Value of a branch if there is one or nullptr otherwise */
+              unique_ptr<BaseAST> ev /**< Likewise, but for `else`*/
+              ) : cond(move(c)), body(move(bd)), else_body(move(el)), value(move(v)), else_value(move(ev)) {}
 
         unique_ptr<BaseAST> cond;
         vector<unique_ptr<BaseAST>> body;
@@ -276,6 +328,7 @@ class IfAST : public BaseAST, public Block {
         }
 };
 
+/** Integer literal. */
 class IntAST : public BaseAST {
     public:
         IntAST(int i) : value(i) {}
@@ -287,6 +340,7 @@ class IntAST : public BaseAST {
         }
 };
 
+/** Float literal. */
 class FloatAST : public BaseAST {
     public:
         FloatAST(float f) : value(f) {}
@@ -298,6 +352,7 @@ class FloatAST : public BaseAST {
         }
 };
 
+/** String literal. */
 class StrAST : public BaseAST {
     public:
         StrAST(string s) : value(s) {}
@@ -309,6 +364,7 @@ class StrAST : public BaseAST {
         }
 };
 
+/** Boolean literal. */
 class BoolAST : public BaseAST {
     public:
         BoolAST(bool b) : value(b) {}
@@ -319,11 +375,18 @@ class BoolAST : public BaseAST {
             Print::print(value);
         }
 };
-
-// Deque is needed to insert implicit type param with implements
+/** .Node that represents function definition.
+ *
+ * `Deque` is needed to insert implicit type parameter
+ * when function is defined inside of `implement`
+ */
 class FncDefAST : public BaseAST, public Call {
     public:
-        FncDefAST(string nm, deque<pair<string, TType>> ar, TType ret_t, vector< unique_ptr<BaseAST> > bd) : name(nm), args(ar), ret_type(ret_t), body(move(bd)) {}
+        FncDefAST(string nm, /**< Function name*/
+                  deque<pair<string, TType>> ar, /**< Function arguments */
+                  TType ret_t, /**< Function return type*/
+                  vector<unique_ptr<BaseAST>> bd /**< Function body */
+                  ) : name(nm), args(ar), ret_type(ret_t), body(move(bd)) {}
 
         string name;
         deque<pair<string, TType>> args;
@@ -357,10 +420,16 @@ class FncDefAST : public BaseAST, public Call {
         char getType() { return 'F'; }
 };
 
-
+/** Node that represents implementing some functions for a type.
+ *
+ * Implementing a function really just means inserting an implicit type parameter (self)
+ * as function's first argument
+ */
 class ImplementAST : public BaseAST {
     public:
-        ImplementAST(string t, vector<unique_ptr<FncDefAST>> f) : type(t), fncs(move(f)) {}
+        ImplementAST(string t, /**< Type name */
+                     vector<unique_ptr<FncDefAST>> f /**< Implemented functions */
+                     ) : type(t), fncs(move(f)) {}
         string type;
         vector<unique_ptr<FncDefAST>> fncs;
 
@@ -379,6 +448,7 @@ class ImplementAST : public BaseAST {
         }
 };
 
+/** Represents reference to some value. */
 class RefToValAST : public BaseAST {
     public:
         RefToValAST(unique_ptr<BaseAST> v) : value(move(v)) {}
@@ -391,6 +461,7 @@ class RefToValAST : public BaseAST {
         }
 };
 
+/** Represents dereference. */
 class ValOfRefAST : public BaseAST {
     public:
         ValOfRefAST(unique_ptr<BaseAST> v) : value(move(v)) {}
@@ -403,9 +474,13 @@ class ValOfRefAST : public BaseAST {
         }
 };
 
+/** Represents definition of some external function. */
 class ExternFncAST : public BaseAST {
     public:
-        ExternFncAST(string s, vector<TType> ar, TType r) : name(s), args(ar), ret_type(r) {}
+        ExternFncAST(string s, /**< Function name */
+                     vector<TType> ar, /**< Function arguments' types */
+                     TType r /**< Return type*/
+                     ) : name(s), args(ar), ret_type(r) {}
 
         string name;
         vector<TType> args;
@@ -416,9 +491,16 @@ class ExternFncAST : public BaseAST {
         }
 };
 
+/** Represents a call to some function.
+ *
+ * Deque is needed for an implicit type parameter
+ */
 class FncCallAST : public BaseAST {
     public:
-        FncCallAST(string nm, deque<unique_ptr<BaseAST>> ar, string t = "") : name(nm), args(move(ar)), type(t) {}
+        FncCallAST(string nm, /**< Function name */
+                   deque<unique_ptr<BaseAST>> ar, /**< Function arguments */
+                   string t = "" /**< Type, to which this function belongs or an empty string*/
+                   ) : name(nm), args(move(ar)), type(t) {}
 
         string name;
         deque<unique_ptr<BaseAST>> args;
@@ -439,6 +521,7 @@ class FncCallAST : public BaseAST {
         }
 };
 
+/** Declaration of a variable and optionally it's value. */
 class DeclAST : public BaseAST {
     public:
         DeclAST(string nm, TType ty, unique_ptr<BaseAST> val) : name(nm), type(ty), value(move(val)) {}
@@ -460,6 +543,7 @@ class DeclAST : public BaseAST {
         }
 };
 
+/** Assignments to a variable. */
 class AssAST : public BaseAST {
     public:
         AssAST(string nm, unique_ptr<BaseAST> val) : name(nm), value(move(val)) {}
@@ -479,6 +563,7 @@ class AssAST : public BaseAST {
         }
 };
 
+/** Identifier, e.g. variable name. */
 class IdentAST : public BaseAST {
     public:
         IdentAST(string v) : value(v) {}
@@ -489,6 +574,7 @@ class IdentAST : public BaseAST {
         }
 };
 
+/** Represents returning some value from a function. */
 class RetAST : public BaseAST {
     public:
         RetAST(unique_ptr<BaseAST> v) : value(move(v)) {}

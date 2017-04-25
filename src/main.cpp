@@ -67,12 +67,12 @@ class CodeGen {
 
             ASTParser parser(getFileContent(fname + ".ff"));
 
-            ast = parser.get_functions();
-            exts = parser.get_ext_functions();
-            ops = parser.get_operators();
-            incls = parser.get_includes();
-            typedefs = parser.get_typedefs();
-            impls = parser.get_impls();
+            ast = move(parser.functions);
+            exts = move(parser.ext_functions);
+            ops = move(parser.operators);
+            incls = move(parser.includes);
+            impls = move(parser.impls);
+            typedefs = parser.typedefs;
 
             AST2IR();
         }

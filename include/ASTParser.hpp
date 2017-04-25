@@ -10,8 +10,6 @@
 #include "AST.hpp"
 #include "TokenStream.hpp"
 
-class TokenStream;
-
 using std::string;
 using std::unique_ptr;
 using std::vector;
@@ -20,38 +18,44 @@ using std::pair;
 using std::exception;
 using std::stringstream;
 
+/** Class that parses tokens and forms an AST
+ *
+ * This class is one of the main classes, it takes a string with program's text,
+ * gives it to the inner TokenStream and then tries to form an AST, which then can
+ * be extracted from their respective fields. Under the hood, it checks tokens
+ * with switch/case, gets the next token and calls a method to parse some kind of structure,
+ * like function definition. Then this structures are pushed to respective fields,
+ * which are then used by CodeGen.
+ *
+ * Note that when method that parses something is called, it is this method's resposibility
+ * to set ASTParser::currTok to the next token after it.
+ */
 class ASTParser {
     public:
         ASTParser(string s);
         ~ASTParser() {}
 
-        #define gen_getter(ty, nm) vector<unique_ptr<ty>> get_##nm() { return move(nm); }
-        gen_getter(FncDefAST, functions);
-        gen_getter(ExternFncAST, ext_functions);
-        gen_getter(OperatorDefAST, operators);
-        gen_getter(IncludeAST, includes);
-        gen_getter(ImplementAST, impls);
-        map<string, std::shared_ptr<TypeDefAST>> get_typedefs() {return typedefs; }
+        vector<unique_ptr<FncDefAST>> functions; /**< Top level functions */
+        vector<unique_ptr<ExternFncAST>> ext_functions; /**< Externs */
+        vector<unique_ptr<OperatorDefAST>> operators; /**< Operator definitions */
+        vector<unique_ptr<IncludeAST>> includes; /**< Includes */
+        vector<unique_ptr<ImplementAST>> impls; /**< Implementations of functions for some types */
+        map<string, std::shared_ptr<TypeDefAST>> typedefs; /**< Custom type definitions */
 
     private:
-        TokenStream tokens;
+        TokenStream tokens; /**< Inner TokenStream, which basically holds whole programm's tokenized code */
 
-        vector<string> types;
-        string IdentStr;
-        Token currTok = Token::None;
+        vector<string> types; /**< List of strings that are recognized as types */
+        string IdentStr; /**< Current token's string representation */
+        Token currTok; /**< Current token */
 
-        long symbol = 0, line = 0;
-
-        vector<unique_ptr<FncDefAST>> functions;
-        vector<unique_ptr<ExternFncAST>> ext_functions;
-        vector<unique_ptr<OperatorDefAST>> operators;
-        vector<unique_ptr<IncludeAST>> includes;
-        vector<unique_ptr<ImplementAST>> impls;
-        map<string, std::shared_ptr<TypeDefAST>> typedefs;
+        long symbol = 0, /**< Current symbol in line */
+             line = 0;  /**< Current line in file */
 
         Token getNextTok();
 
         bool isType(string);
+
         TType parseTType();
 
         unique_ptr<IncludeAST> parseInclude();
@@ -67,27 +71,27 @@ class ASTParser {
 
         pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> parseBlock();
 
-        gen_parse(Var, TType);
-        gen_parse(Ass);
+        gen_parse(Var, TType)
+        gen_parse(Ass)
 
-        gen_parse(IntLiteral);
-        gen_parse(FloatLiteral);
-        gen_parse(BoolLiteral);
-        gen_parse(StrLiteral);
+        gen_parse(IntLiteral)
+        gen_parse(FloatLiteral)
+        gen_parse(BoolLiteral)
+        gen_parse(StrLiteral)
 
 
-        gen_parse(TypeFieldStore, string);
-        gen_parse(TypeFieldLoad, string);
-        gen_parse(TypeFncCall, string);
+        gen_parse(TypeFieldStore, string)
+        gen_parse(TypeFieldLoad, string)
+        gen_parse(TypeFncCall, string)
 
-        gen_parse(Type);
-        gen_parse(Stmt, bool);
-        gen_parse(Val);
-        gen_parse(FncCall);
-        gen_parse(Expr);
-        gen_parse(Ret);
-        gen_parse(If);
-        gen_parse(While);
+        gen_parse(Type)
+        gen_parse(Stmt, bool)
+        gen_parse(Val)
+        gen_parse(FncCall)
+        gen_parse(Expr)
+        gen_parse(Ret)
+        gen_parse(If)
+        gen_parse(While)
 
-        gen_parse(Operator, unique_ptr<BaseAST>);
+        gen_parse(Operator, unique_ptr<BaseAST>)
 };
