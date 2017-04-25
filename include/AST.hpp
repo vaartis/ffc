@@ -50,6 +50,12 @@ class Call {
         virtual char getType() = 0;
 };
 
+class Block {
+    public:
+        virtual ~Block() {}
+        virtual bool hasValue() = 0;
+};
+
 class WhileAST : public BaseAST {
     public:
         WhileAST(unique_ptr<BaseAST> c, vector<unique_ptr<BaseAST>> b) : cond(move(c)), body(move(b))  {}
@@ -219,7 +225,7 @@ class OperatorAST : public BaseAST {
         }
 };
 
-class IfAST : public BaseAST {
+class IfAST : public BaseAST, public Block {
     public:
         IfAST(unique_ptr<BaseAST> c, vector<unique_ptr<BaseAST>> bd, vector<unique_ptr<BaseAST>> el,
               unique_ptr<BaseAST> v, unique_ptr<BaseAST> ev) : cond(move(c)), body(move(bd)),
@@ -230,6 +236,10 @@ class IfAST : public BaseAST {
         vector<unique_ptr<BaseAST>> else_body;
         unique_ptr<BaseAST> value;
         unique_ptr<BaseAST> else_value;
+
+        bool hasValue() {
+            return value && else_value;
+        }
 
         void dump() {
             Print::print("If (");

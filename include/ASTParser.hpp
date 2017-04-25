@@ -65,6 +65,8 @@ class ASTParser {
 
         deque<pair<string, TType>> parseParams();
 
+        pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> parseBlock();
+
         gen_parse(Var, TType);
         gen_parse(Ass);
 

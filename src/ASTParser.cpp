@@ -450,62 +450,64 @@ unique_ptr<BaseAST> ASTParser::parseVal() {
     }
 }
 
-// if ::= if <expr> { <stmt>* }
-unique_ptr<BaseAST> ASTParser::parseIf() {
-    getNextTok(); // eat if
-
-    auto cond = parseExpr();
-
+pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> ASTParser::parseBlock() {
     assert(currTok == Token::OpCB);
 
+    getNextTok();
+
     vector<unique_ptr<BaseAST>> body;
-    vector<unique_ptr<BaseAST>> else_body;
-
-    unique_ptr<BaseAST> value = nullptr, else_value = nullptr;
-
-    getNextTok(); // eat {
+    unique_ptr<BaseAST> value = nullptr;
 
     while (currTok != Token::ClCB) {
-        auto res = parseStmt(false);
+        auto v = parseStmt(false);
 
         if (currTok == Token::ClCB) {
-            value = move(res);
-            break;
+            BaseAST *inner = v.get();
+
+            if (auto expr = dynamic_cast<Block *>(inner)) {
+                if (expr->hasValue())
+                    value = move(v);
+                else
+                    body.push_back(move(v));
+            } else {
+                value = move(v);
+            }
         } else if (currTok == Token::Semicolon) {
-            body.push_back(move(res));
+            body.push_back(move(v));
             getNextTok();
         } else {
             throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
         }
     }
 
-    getNextTok(); // eat } or get to else
+    assert(currTok == Token::ClCB);
+    getNextTok();
+
+    return {move(body), move(value)};
+}
+
+// if ::= if <expr> { <stmt>* }
+unique_ptr<BaseAST> ASTParser::parseIf() {
+    getNextTok(); // eat if
+
+    auto cond = parseExpr();
+
+    pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> parsed_then = parseBlock();
+    vector<unique_ptr<BaseAST>> body = move(parsed_then.first);
+    unique_ptr<BaseAST> value = move(parsed_then.second);
 
     if (value != nullptr && currTok != Token::Else) {
         throw runtime_error("If expression returning value must have an else branch");
     }
 
+    vector<unique_ptr<BaseAST>> else_body;
+    unique_ptr<BaseAST> else_value = nullptr;
     if (currTok == Token::Else) {
         getNextTok(); // eat else
 
-        assert(currTok == Token::OpCB);
-
-        getNextTok(); // eat {
-
-        while (currTok != Token::ClCB) {
-            auto res = parseStmt(false);
-
-            if (currTok == Token::ClCB) {
-                else_value = move(res);
-                break;
-            } else if (currTok == Token::Semicolon) {
-                else_body.push_back(move(res));
-                getNextTok();
-            } else {
-                throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
-            }
-        }
-        getNextTok(); // eat }
+        pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> parsed_else = parseBlock();
+        else_body = move(parsed_else.first);
+        else_value = move(parsed_else.second);
     }
 
     return make_unique<IfAST>(move(cond), move(body), move(else_body), move(value), move(else_value));

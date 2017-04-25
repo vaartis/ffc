@@ -242,6 +242,9 @@ Type *CodeGen::getLLVMType(TType t) {
 }
 
 Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
+    if (obj == nullptr)
+        throw runtime_error("OBJECT IS A NULL POINTER");
+
     if (auto v = dynamic_cast<ValOfRefAST *>(obj.get())) {
         if (auto in = dynamic_cast<AssAST *>(v->value.get())) {
             Value *var;
@@ -505,7 +508,7 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
 
         Value *c = builder->CreateCondBr(cond, then, els);
 
-        Value *if_val, *else_val;
+        Value *if_val = nullptr, *else_val = nullptr;
 
         // then
 
@@ -515,9 +518,11 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
             genExpr(move(v));
 
         if (ifb->value != nullptr) {
-            assert(ifb->else_value != nullptr);
             if_val = genExpr(move(ifb->value));
         }
+
+        then = builder->GetInsertBlock(); // update for phi
+
         builder->CreateBr(ifend);
 
         // else
@@ -530,20 +535,23 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
 
         if (ifb->else_value != nullptr) {
             else_val = genExpr(move(ifb->else_value));
-            assert(if_val->getType() == else_val->getType());
         }
+
+        els = builder->GetInsertBlock(); // update for phi
 
         builder->CreateBr(ifend);
 
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
         builder->SetInsertPoint(ifend);
 
-        if (if_val != nullptr) {
-                PHINode *if_res = builder->CreatePHI(if_val->getType(), 2, "if.expr.res");
-                if_res->addIncoming(if_val, then);
-                if_res->addIncoming(else_val, els);
+        if (if_val != nullptr && else_val != nullptr) {
+            assert(if_val->getType() == else_val->getType());
 
-                return if_res;
+            PHINode *if_res = builder->CreatePHI(if_val->getType(), 2, "if.expr.res");
+            if_res->addIncoming(if_val, then);
+            if_res->addIncoming(else_val, els);
+
+            return if_res;
         }
 
         return cond;
