@@ -5,7 +5,7 @@
 TEST(OperatorDef, IntPlusStr) {
     ASTParser par("operator +(int x, str y) int { }");
 
-    vector<unique_ptr<OperatorDefAST>> ops = par.get_operators();
+    vector<unique_ptr<OperatorDefAST>> ops = move(par.operators);
 
     ASSERT_EQ(ops.size(), 1);
 
@@ -21,7 +21,7 @@ TEST(OperatorDef, IntPlusStr) {
 TEST(OperatorDef, RefIntPlusRefStr) {
     ASTParser par("operator +(ref int x, ref str y) ref int { ret x; }");
 
-    vector<unique_ptr<OperatorDefAST>> ops = par.get_operators();
+    vector<unique_ptr<OperatorDefAST>> ops = move(par.operators);
 
     ASSERT_EQ(ops.size(), 1);
 

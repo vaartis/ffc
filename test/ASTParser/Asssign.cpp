@@ -4,7 +4,7 @@
 TEST(Assign, Simple){
     ASTParser par("fnc main() { x = 1; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 1);
@@ -26,7 +26,7 @@ TEST(Assign, Simple){
 TEST(Assign, Variable) {
     ASTParser par("fnc main() { y = x; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 1);

@@ -4,7 +4,7 @@
 TEST(Declaration, Empty){
     ASTParser par("fnc main() { str x; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 1);
@@ -20,7 +20,7 @@ TEST(Declaration, Empty){
 TEST(Declaration, Simple) {
     ASTParser par("fnc main() { str x = 10; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 1);
@@ -40,7 +40,7 @@ TEST(Declaration, Simple) {
 TEST(Declaration, MultipleVariables) {
     ASTParser par("fnc main() { str x = y; str y = x; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 2);

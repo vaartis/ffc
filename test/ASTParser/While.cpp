@@ -5,7 +5,7 @@
 TEST(While, Empty) {
     ASTParser par("fnc main() { while true { } }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     unique_ptr<BaseAST> wl = move(mainf->body[0]);
@@ -26,7 +26,7 @@ TEST(While, Empty) {
 TEST(While, BasicBody) {
     ASTParser par("fnc main() { while true { int x = 1; } }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     unique_ptr<BaseAST> wl = move(mainf->body[0]);

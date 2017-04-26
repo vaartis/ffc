@@ -4,7 +4,7 @@
 TEST(If, Empty) {
     ASTParser par("fnc main() { if true {} }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     unique_ptr<BaseAST> ii = move(mainf->body[0]);
@@ -25,7 +25,7 @@ TEST(If, Empty) {
 TEST(If, ReturnValue) {
     ASTParser par("fnc main() { if true { 1; 2; 3 } else { 12 } }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 1);
@@ -53,7 +53,7 @@ TEST(If, ReturnValue) {
 TEST(If, NestedReturnValue) {
     ASTParser par("fnc main() { ret if true { if false { 1 } else { 2 } } else { 3 }; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.get_functions();
+    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
     unique_ptr<FncDefAST> mainf = move(fns[0]);
 
     ASSERT_EQ(mainf->body.size(), 1);

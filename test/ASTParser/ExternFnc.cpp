@@ -5,7 +5,7 @@
 TEST(ExternFnc, NoParams) {
     ASTParser par("extern test();");
 
-    vector<unique_ptr<ExternFncAST>> incls = par.get_ext_functions();
+    vector<unique_ptr<ExternFncAST>> incls = move(par.ext_functions);
 
     ASSERT_EQ(incls.size(), 1);
 
@@ -19,7 +19,7 @@ TEST(ExternFnc, NoParams) {
 TEST(ExternFnc, WithParamsAndRet) {
     ASTParser par("extern test(int, float) bool;");
 
-    vector<unique_ptr<ExternFncAST>> incls = par.get_ext_functions();
+    vector<unique_ptr<ExternFncAST>> incls = move(par.ext_functions);
 
     ASSERT_EQ(incls.size(), 1);
 
@@ -38,7 +38,7 @@ TEST(ExternFnc, WithParamsAndRet) {
 TEST(ExternFnc, ForgotSemicolon) {
     ASTParser par("extern test()");
 
-    vector<unique_ptr<ExternFncAST>> incls = par.get_ext_functions();
+    vector<unique_ptr<ExternFncAST>> incls = move(par.ext_functions);
 
     ASSERT_EQ(incls.size(), 0);
 }

@@ -5,7 +5,7 @@
 TEST(TypeDef, Empty) {
     ASTParser par("type T { }");
 
-    map<string, shared_ptr<TypeDefAST>> types = par.get_typedefs();
+    map<string, shared_ptr<TypeDefAST>> types = par.typedefs;
 
     ASSERT_EQ(types.size(), 1);
 
@@ -18,7 +18,7 @@ TEST(TypeDef, Empty) {
 TEST(TypeDef, WithFields) {
     ASTParser par("type T { int x, str y }");
 
-    map<string, shared_ptr<TypeDefAST>> types = par.get_typedefs();
+    map<string, shared_ptr<TypeDefAST>> types = par.typedefs;
 
     ASSERT_EQ(types.size(), 1);
 
@@ -34,7 +34,7 @@ TEST(TypeDef, WithFields) {
 TEST(TypeDef, WithRef) {
     ASTParser par("type T { ref int x, ref str y }");
 
-    map<string, shared_ptr<TypeDefAST>> types = par.get_typedefs();
+    map<string, shared_ptr<TypeDefAST>> types = par.typedefs;
 
     shared_ptr<TypeDefAST> type = types.at("T");
 
