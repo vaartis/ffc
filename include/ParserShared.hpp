@@ -97,4 +97,5 @@ enum class Token {
     Else,
     Implement,
     For,
+    Destructor,
 };

@@ -25,9 +25,9 @@ Token ASTParser::getNextTok() {
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
     types = tokens.getTypes();
     currTok = Token::None;
+    getNextTok();
     while (true) {
         try {
-            getNextTok();
             switch(currTok) {
                 case Token::OperatorDef:
                     operators.push_back(parseOperatorDef());
@@ -48,6 +48,9 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                     parseTypeDef();
                     break;
                 default:
+                    if (IdentStr.length() > 0)
+                        cerr << "WARNING: unknown toplevel token " << IdentStr << endl;
+                    getNextTok();
                     break;
             }
         } catch (TokenStream::EOFException) {
@@ -182,21 +185,27 @@ unique_ptr<ImplementAST> ASTParser::parseImplement() {
     assert(currTok == Token::OpCB);
 
     vector<unique_ptr<FncDefAST>> fncs;
+    unique_ptr<FncDefAST> destructor;
 
     getNextTok();
 
     while (currTok != Token::ClCB) {
-        assert(currTok == Token::Fnc);
+        unique_ptr<FncDefAST> curr_fnc;
 
-        auto curr_fnc = parseFncDef();
+        if (currTok == Token::Fnc) {
+            curr_fnc = parseFncDef();
+        } else if (currTok == Token::Destructor) {
+            getNextTok(); // eat destructor
+            curr_fnc = make_unique<FncDefAST>("destructor", deque<pair<string, TType>>{}, _TType::Void, parseFncBody());
+        } else {
+            throw runtime_error("Unknown token in IMPLEMENT");
+        }
 
         curr_fnc->args.push_front({"self", type});
-
         fncs.push_back(move(curr_fnc));
-
-        getNextTok();
     }
-    getNextTok();
+
+    getNextTok(); // eat }
 
     return make_unique<ImplementAST>(type, move(fncs));
 }
@@ -248,6 +257,9 @@ void ASTParser::parseTypeDef() {
             }
         }
     }
+
+    getNextTok(); // eat }
+
     typedefs.emplace(name, make_shared<TypeDefAST>(name, fields));
 }
 
@@ -331,6 +343,8 @@ unique_ptr<ExternFncAST> ASTParser::parseExternFnc() {
 
     assert(currTok == Token::Semicolon);
 
+    getNextTok(); // eat ;
+
     auto res = make_unique<ExternFncAST>(name, args, ret_type);
 
     return res;
@@ -346,40 +360,14 @@ unique_ptr<OperatorDefAST> ASTParser::parseOperatorDef() {
 
     getNextTok(); // eat name
 
-    pair<string, TType> lhs;
-    pair<string, TType> rhs;
-
-    assert(currTok == Token::OpP);
-
-    getNextTok();
-    lhs.second = parseTType();
-    assert(if_ident(currTok, IdentStr));
-    lhs.first = IdentStr;
-
-    getNextTok();
-    assert(currTok == Token::Comma);
-    getNextTok(); // eat comma
-
-    rhs.second = parseTType();
-    assert(if_ident(currTok, IdentStr));
-    rhs.first = IdentStr;
-    getNextTok();
-
-    assert(currTok == Token::ClP);
-    getNextTok(); // eat )
+    auto params = parseParams();
+    assert(params.size() == 2 && "More then two arguments for an operator!");
 
     TType ret_type = parseTType();
 
-    assert(currTok == Token::OpCB);
+    auto body = parseFncBody();
 
-    getNextTok(); //eat {
-
-    vector< unique_ptr<BaseAST> > body;
-    while (currTok != Token::ClCB) {
-        body.push_back(parseStmt());
-    }
-
-    return make_unique<OperatorDefAST>(name, lhs, rhs, ret_type, move(body));
+    return make_unique<OperatorDefAST>(name, params, ret_type, move(body));
 }
 
 /** Parse function's parameters. */
@@ -409,6 +397,22 @@ deque<pair<string, TType>> ASTParser::parseParams() {
     return args;
 }
 
+vector<unique_ptr<BaseAST>> ASTParser::parseFncBody() {
+    assert(currTok == Token::OpCB);
+
+    getNextTok(); //eat {
+
+    vector<unique_ptr<BaseAST>> body;
+
+    while (currTok != Token::ClCB) {
+        body.push_back(parseStmt());
+    }
+
+    getNextTok(); // eat }
+
+    return body;
+}
+
 /** Parses function definition. */
 unique_ptr<FncDefAST> ASTParser::parseFncDef() {
     getNextTok(); // eat fnc
@@ -427,15 +431,7 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
         ret_type = parseTType();
     }
 
-    assert(currTok == Token::OpCB);
-
-    getNextTok(); //eat {
-
-    vector<unique_ptr<BaseAST>> body;
-
-    while (currTok != Token::ClCB) {
-        body.push_back(parseStmt());
-    }
+    auto body = parseFncBody();
 
     auto res = make_unique<FncDefAST>(name, args, ret_type, move(body));
     return res;

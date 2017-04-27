@@ -106,6 +106,9 @@ class CodeGen {
                 Function *fn;
                 map<string, Value *> variables;
                 Type *ret_type;
+
+                BasicBlock *exit_block;
+                Value *exit_value;
         };
 
         struct LLVMStruct {
@@ -127,6 +130,8 @@ class CodeGen {
         string mangle(LLVMCall f, Type *tp);
         string mangle(Call *f, string tp);
 
+
+        void genFnc(FncDefAST &fnc, string tp);
         void AST2IR();
         void genCompiledIn();
         Value *genExpr(unique_ptr<BaseAST> obj, bool noload);
@@ -305,12 +310,13 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
             if (retxpr->getType() != functions.at(curr_fn_name).ret_type)
                 throw runtime_error("Invalid return type");
 
-            return builder->CreateRet(retxpr);
+            functions.at(curr_fn_name).exit_value = retxpr;
         } else {
             if (functions.at(curr_fn_name).ret_type != builder->getVoidTy())
                 throw runtime_error("Can't return nothing from a non-void function");
-            return builder->CreateRetVoid();
         }
+
+        return builder->CreateBr(functions.at(curr_fn_name).exit_block);
     } else if (auto ca = dynamic_cast<FncCallAST *>(obj.get())) {
         LLVMFn callee;
         vector<Value *> argms;
@@ -560,6 +566,99 @@ Value *CodeGen::genExpr(unique_ptr<BaseAST> obj, bool noload = false) {
     throw runtime_error("strange expr");
 }
 
+/** Generate a function from an AST node.
+ *
+ * Inserts exiting and entering points, exiting value, mangles function's name & adds
+ * it to global function list.
+ */
+void CodeGen::genFnc(FncDefAST &fn, string type = "") {
+        if (find(real_names.begin(), real_names.end(), fn.name) == real_names.end())
+            real_names.push_back(fn.name);
+        else
+            throw runtime_error("Redifinition of a function: " + fn.name);
+
+        if (fn.name != "main") {
+            fn.name = mangle(&fn, type);
+        }
+
+        curr_fn_name = fn.name;
+
+        vector<Type *> fn_args;
+        map<string, Value *> fn_vars;
+
+        for (auto &ar : fn.args)
+            fn_args.push_back(getLLVMType(ar.second));
+
+        FunctionType *tp = FunctionType::get(getLLVMType(fn.ret_type), fn_args, false);
+        Function *fnc = Function::Create(tp, Function::ExternalLinkage, fn.name, module.get());
+
+        BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
+        BasicBlock *exit = BasicBlock::Create(context, "exit", fnc);
+
+        builder->SetInsertPoint(enter);
+
+        Value *exit_value = nullptr;
+        if (fn.ret_type != _TType::Void) {
+            exit_value = builder->CreateAlloca(getLLVMType(fn.ret_type), nullptr, "ret_value");
+        };
+
+        auto arg = fnc->arg_begin();
+        auto fnc_arg = fn.args.begin();
+        for (; arg != fnc->arg_end(); arg++, fnc_arg++) {
+            Value *alloc = builder->CreateAlloca(getLLVMType(fnc_arg->second), nullptr, fnc_arg->first);
+            builder->CreateStore(&*arg, alloc);
+            fn_vars.emplace(fnc_arg->first, alloc);
+        }
+
+        functions.emplace(fn.name, LLVMFn(fnc, fn_vars, getLLVMType(fn.ret_type)));
+        functions.at(curr_fn_name).exit_block = exit;
+        functions.at(curr_fn_name).exit_value = exit_value;
+
+        for (auto &expr : fn.body) {
+            genExpr(move(expr));
+        }
+
+        // Run destructors
+
+        BasicBlock *curr = builder->GetInsertBlock();
+
+        builder->SetInsertPoint(exit);
+        for (auto &v : functions.at(curr_fn_name).variables) {
+            Value *val = v.second;
+
+            if (val != exit_value) { // Do not delete returned value
+                Type *tp = val->getType();
+
+                while (tp->isPointerTy())
+                    tp = tp->getContainedType(0);
+
+                if (tp->isStructTy()) {
+                    if (type != "") { // do not run destructor in yourself's destructor
+                        if (fn_vars.at("self")->getType()->getContainedType(0) == tp)
+                            break;
+                    }
+
+                    string st_name = tp->getStructName();
+
+                    try {
+                        Type *selftp = struct_types.at(st_name).type;
+                        string mname = mangle(LLVMCall("destructor", {selftp}, 'F'), selftp);
+                        auto callee = functions.at(mname);
+
+                        builder->CreateCall(callee.fn, builder->CreateLoad(val));
+                    } catch (out_of_range e) { /* No destructor */ }
+                }
+            }
+        }
+        if (fn.ret_type != _TType::Void) {
+            builder->CreateRet(builder->CreateLoad(exit_value));
+        } else {
+            builder->CreateRetVoid();
+        }
+
+        builder->SetInsertPoint(curr);
+}
+
 void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unused
     auto defOp = [&](tuple<string, TType, TType, TType, function<Value *(Value *, Value *)>> fncdef) {
         string op = get<0>(fncdef);
@@ -648,35 +747,7 @@ void CodeGen::AST2IR() {
     }
 
     for (auto &op : this->ops) {
-        string name = mangle(op.get());
-
-        Type *lhs_type = getLLVMType(op->lhs.second);
-        Type *rhs_type = getLLVMType(op->rhs.second);
-
-        curr_fn_name = name;
-
-        FunctionType *tp = FunctionType::get(getLLVMType(op->ret_type), {lhs_type, rhs_type},false);
-        Function *fnc = Function::Create(tp, Function::ExternalLinkage, name, module.get());
-
-        BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
-        builder->SetInsertPoint(enter);
-
-        vector<Argument *> fn_args;
-        map<string, Value *> fn_vars;
-
-        Value *alloc_lhs = builder->CreateAlloca(lhs_type, nullptr, op->lhs.first);
-        builder->CreateStore(&*fnc->arg_begin(), alloc_lhs);
-        fn_vars.emplace(op->lhs.first, alloc_lhs);
-
-        Value *alloc_rhs = builder->CreateAlloca(rhs_type, nullptr, op->rhs.first);
-        builder->CreateStore(&*next(fnc->arg_begin(), 1), alloc_rhs);
-        fn_vars.emplace(op->rhs.first, alloc_rhs);
-
-        functions.emplace(name, LLVMFn(fnc, fn_vars, getLLVMType(op->ret_type)));
-
-        for (auto &expr : op->body) {
-            genExpr(move(expr));
-        }
+        genFnc(*op);
     }
 
     for (auto &st : this->typedefs) {
@@ -696,81 +767,12 @@ void CodeGen::AST2IR() {
 
     for (auto &i : this->impls) {
         for (auto &fn : i->fncs) {
-            if (find(real_names.begin(), real_names.end(), i->type + "::" + fn->name) == real_names.end())
-                real_names.push_back(i->type + "::" + fn->name);
-            else
-                throw runtime_error("Redifinition of a function: " + i->type + "::" + fn->name);
-
-
-            fn->name = mangle(fn.get(), i->type);
-
-            curr_fn_name = fn->name;
-
-            vector<Type *> fn_args;
-            map<string, Value *> fn_vars;
-
-            for (auto &ar : fn->args)
-                fn_args.push_back(getLLVMType(ar.second));
-
-            FunctionType *tp = FunctionType::get(getLLVMType(fn->ret_type), fn_args, false);
-            Function *fnc = Function::Create(tp, Function::ExternalLinkage, fn->name, module.get());
-
-            BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
-            builder->SetInsertPoint(enter);
-
-            auto arg = fnc->arg_begin();
-            auto fnc_arg = fn->args.begin();
-            for (; arg != fnc->arg_end(); arg++, fnc_arg++) {
-                Value *alloc = builder->CreateAlloca(getLLVMType(fnc_arg->second), nullptr, fnc_arg->first);
-                builder->CreateStore(&*arg, alloc);
-                fn_vars.emplace(fnc_arg->first, alloc);
-            }
-
-            functions.emplace(fn->name, LLVMFn(fnc, fn_vars, getLLVMType(fn->ret_type)));
-
-            for (auto &expr : fn->body) {
-                genExpr(move(expr));
-            }
+            genFnc(*fn, i->type);
         }
     }
 
     for (auto &fn : this->ast) {
-        if (find(real_names.begin(), real_names.end(), fn->name) == real_names.end())
-            real_names.push_back(fn->name);
-        else
-            throw runtime_error("Redifinition of a function: " + fn->name);
-
-        if (fn->name != "main") {
-            fn->name = mangle(fn.get());
-        }
-
-        curr_fn_name = fn->name;
-
-        vector<Type *> fn_args;
-        map<string, Value *> fn_vars;
-
-        for (auto &ar : fn->args)
-            fn_args.push_back(getLLVMType(ar.second));
-
-        FunctionType *tp = FunctionType::get(getLLVMType(fn->ret_type), fn_args, false);
-        Function *fnc = Function::Create(tp, Function::ExternalLinkage, fn->name, module.get());
-
-        BasicBlock *enter = BasicBlock::Create(context, "entry", fnc);
-        builder->SetInsertPoint(enter);
-
-        auto arg = fnc->arg_begin();
-        auto fnc_arg = fn->args.begin();
-        for (; arg != fnc->arg_end(); arg++, fnc_arg++) {
-            Value *alloc = builder->CreateAlloca(getLLVMType(fnc_arg->second), nullptr, fnc_arg->first);
-            builder->CreateStore(&*arg, alloc);
-            fn_vars.emplace(fnc_arg->first, alloc);
-        }
-
-        functions.emplace(fn->name, LLVMFn(fnc, fn_vars, getLLVMType(fn->ret_type)));
-
-        for (auto &expr : fn->body) {
-            genExpr(move(expr));
-        }
+        genFnc(*fn);
     }
 }
 
