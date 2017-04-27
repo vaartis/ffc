@@ -213,38 +213,6 @@ class IncludeAST : public BaseAST {
         }
 };
 
-/** Node that represents definition of an operator. */
-class OperatorDefAST : public BaseAST, public Call {
-    public:
-        OperatorDefAST(string nm, /**< Operator name, e.g. `+-!` */
-                       pair<string, TType> l, /**< Name and type of LHS */
-                       pair<string, TType> r, /**< Name and type of RHS */
-                       TType t, /**< Return type */
-                       vector<unique_ptr<BaseAST>> bd /**< Function body */
-                       ) : name(nm), lhs(l), rhs(r), ret_type(t), body(move(bd)) {}
-
-        string name;
-        pair<string, TType> lhs;
-        pair<string, TType> rhs;
-        vector<unique_ptr<BaseAST>> body;
-        TType ret_type;
-
-        void dump() {
-            Print::print("OperatorDef (", lhs.first, name, rhs.first, ") {");
-            OFFSET++;
-
-            for (auto &b : body)
-                b->dump();
-
-            OFFSET--;
-            Print::print("}");
-        }
-
-        string getName() { return name; }
-        deque<pair<string, TType>> getArgs() { return deque<pair<string, TType>>{lhs,rhs}; }
-        char getType() { return 'O'; }
-};
-
 /** AST node that represents usage of an operator */
 class OperatorAST : public BaseAST {
     public:
@@ -418,6 +386,29 @@ class FncDefAST : public BaseAST, public Call {
         string getName() { return name; }
         deque<pair<string, TType>> getArgs() { return args; }
         char getType() { return 'F'; }
+};
+
+/** Node that represents definition of an operator. */
+class OperatorDefAST : public FncDefAST {
+    public:
+        OperatorDefAST(string nm, /**< Operator name, e.g. `+-!` */
+                       deque<pair<string, TType>> params, /**< Name and type of LHS & RHS */
+                       TType t, /**< Return type */
+                       vector<unique_ptr<BaseAST>> bd /**< Function body */
+            ) : FncDefAST(nm, params, t, move(bd)) { }
+
+        void dump() {
+            Print::print("OperatorDef (", args.at(0).first, name, args.at(1).first, ") {");
+            OFFSET++;
+
+            for (auto &b : body)
+                b->dump();
+
+            OFFSET--;
+            Print::print("}");
+        }
+
+        char getType() { return 'O'; }
 };
 
 /** Node that represents implementing some functions for a type.
