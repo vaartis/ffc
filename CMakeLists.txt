@@ -6,7 +6,7 @@ include_directories("include")
 
 option(test "Build tests" OFF)
 
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++1z -Wimplicit-fallthrough")
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-stdlib=libc++ -std=c++1z -Wimplicit-fallthrough")
 
 if(test)
   find_package(GTest REQUIRED)
