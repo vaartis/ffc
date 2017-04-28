@@ -18,7 +18,7 @@ ExternalProject_Add(Variant
   UPDATE_COMMAND ""
   CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/variant")
 
-include_directories("deps/variant/include")
+include_directories("${CMAKE_SOURCE_DIR}/deps/variant/include")
 
 if(test)
   find_package(GTest REQUIRED)
