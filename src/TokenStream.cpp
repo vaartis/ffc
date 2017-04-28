@@ -1,14 +1,16 @@
 #include "TokenStream.hpp"
+#include <iostream>
 
 using namespace std;
 
-long TokenStream::length() {
+unsigned long TokenStream::length() {
     return vec.size();
 }
 
 TokenInfo TokenStream::get() {
     if (index++ >= vec.size())
-        throw TokenStream::EOFException();
+        return TokenInfo(Token::Eof, "EOF", symbol, line);
+
     return vec[index - 1];
 }
 

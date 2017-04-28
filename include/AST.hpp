@@ -354,7 +354,7 @@ class FncDefAST : public BaseAST, public Call {
                   deque<pair<string, TType>> ar, /**< Function arguments */
                   TType ret_t, /**< Function return type*/
                   vector<unique_ptr<BaseAST>> bd /**< Function body */
-                  ) : name(nm), args(ar), ret_type(ret_t), body(move(bd)) {}
+                 ) : name(nm), args(ar), body(move(bd)), ret_type(ret_t) {}
 
         string name;
         deque<pair<string, TType>> args;

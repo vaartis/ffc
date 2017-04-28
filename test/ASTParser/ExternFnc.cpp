@@ -36,9 +36,5 @@ TEST(ExternFnc, WithParamsAndRet) {
 }
 
 TEST(ExternFnc, ForgotSemicolon) {
-    ASTParser par("extern test()");
-
-    vector<unique_ptr<ExternFncAST>> incls = move(par.ext_functions);
-
-    ASSERT_EQ(incls.size(), 0);
+    ASSERT_DEATH(ASTParser par("extern test()"), "Assertion .* failed");
 }

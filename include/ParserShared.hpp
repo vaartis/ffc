@@ -98,4 +98,5 @@ enum class Token {
     Implement,
     For,
     Destructor,
+    Eof,
 };
