@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.2)
-set(CMAKE_CXX_COMPILER clang++-4.0)
+
+find_program(GCC6 "g++-6")
+
+if(GCC6-NOTFOUND)
+  set(CMAKE_CXX_COMPILER "clang++-4.0")
+else()
+  set(CMAKE_CXX_COMPILER "g++-6")
+endif()
+
 project(FF C CXX)
 
 include_directories("include")
 
 option(test "Build tests" OFF)
 
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-stdlib=libc++ -std=c++1z -Wimplicit-fallthrough")
+set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++1z")
 
 include(ExternalProject)
 
