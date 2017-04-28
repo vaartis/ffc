@@ -27,17 +27,14 @@ class TokenStream {
     public:
         TokenStream(string s);
 
-        /** End of file */
-        struct EOFException : exception {};
-
         char getChar();
-        long length();
+        unsigned long length();
         TokenInfo get();
         TokenInfo peek();
         vector<string> getTypes();
     private:
         long line = 1, symbol = 1;
-        long index = 0;
+        unsigned long index = 0;
         unique_ptr<stringstream> text;
         vector<TokenInfo> vec;
         char lastchr = ' ';

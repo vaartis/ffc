@@ -18,11 +18,13 @@
 #include <sstream>
 #include <memory>
 #include <functional>
-#include <variant>
+#include "mpark/variant.hpp"
 
 #include "ASTParser.hpp"
 
 using namespace std;
+
+using mpark::variant;
 
 using namespace llvm;
 

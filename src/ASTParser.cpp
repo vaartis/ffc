@@ -25,38 +25,39 @@ Token ASTParser::getNextTok() {
 ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
     types = tokens.getTypes();
     currTok = Token::None;
-    getNextTok();
+    if (IdentStr.length() == 0)
+        getNextTok();
     while (true) {
-        try {
-            switch(currTok) {
-                case Token::OperatorDef:
-                    operators.push_back(parseOperatorDef());
-                    break;
-                case Token::Fnc:
-                    functions.push_back(parseFncDef());
-                    break;
-                case Token::Extern:
-                    ext_functions.push_back(parseExternFnc());
-                    break;
-                case Token::Implement:
-                    impls.push_back(parseImplement());
-                    break;
-                case Token::Include:
-                    includes.push_back(parseInclude());
-                    break;
-                case Token::TypeDef:
-                    parseTypeDef();
-                    break;
-                default:
-                    if (IdentStr.length() > 0)
-                        cerr << "WARNING: unknown toplevel token " << IdentStr << endl;
-                    getNextTok();
-                    break;
-            }
-        } catch (TokenStream::EOFException) {
-            break;
+        switch(currTok) {
+            case Token::Eof:
+                goto end;
+            case Token::Fnc:
+                functions.push_back(parseFncDef());
+                break;
+            case Token::OperatorDef:
+                operators.push_back(parseOperatorDef());
+                break;
+            case Token::Extern:
+                ext_functions.push_back(parseExternFnc());
+                break;
+            case Token::Implement:
+                impls.push_back(parseImplement());
+                break;
+            case Token::Include:
+                includes.push_back(parseInclude());
+                break;
+            case Token::TypeDef:
+                parseTypeDef();
+                break;
+            default:
+                if (IdentStr.length() > 0)
+                    cerr << "WARNING: unknown toplevel token " << IdentStr << endl;
+                getNextTok();
+                break;
         }
     }
+end:
+    return;
 }
 
 /** Checks if provided string is a custom type. */
@@ -158,11 +159,12 @@ unique_ptr<BaseAST> ASTParser::parseStmt(bool test_semicolon = true /** There ar
     if (!skip_sm) {
         if (test_semicolon && currTok != Token::Semicolon)
             throw runtime_error("Expected SEMICOLON at " + to_string(line) + ":" + to_string(symbol));
-        else if (test_semicolon)
+        else if (test_semicolon && currTok == Token::Semicolon) {
             getNextTok();
+        }
     }
 
-    return move(stmt);
+    return stmt;
 }
 
 /** Parses function implementation for types */
@@ -273,6 +275,7 @@ unique_ptr<IncludeAST> ASTParser::parseInclude() {
         mods.push_back(IdentStr);
         getNextTok();
     }
+    getNextTok(); // eat ;
 
     return make_unique<IncludeAST>(mods);
 }
@@ -431,10 +434,9 @@ unique_ptr<FncDefAST> ASTParser::parseFncDef() {
         ret_type = parseTType();
     }
 
-    auto body = parseFncBody();
+    vector<unique_ptr<BaseAST>> body = parseFncBody();
 
-    auto res = make_unique<FncDefAST>(name, args, ret_type, move(body));
-    return res;
+    return make_unique<FncDefAST>(name, args, ret_type, move(body));
 }
 
 /** Parses function's return statements. */

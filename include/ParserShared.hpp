@@ -1,9 +1,9 @@
 #pragma once
 
-#include <variant>
+#include "mpark/variant.hpp"
 #include <string>
 
-using std::variant;
+using mpark::variant;
 using std::string;
 using std::get;
 using std::shared_ptr;
@@ -26,7 +26,7 @@ enum class _TType {
  */
 class TType {
     public:
-        using IT = std::variant<_TType, string>;
+        using IT = variant<_TType, string>;
 
         template<class T> TType(T a) : inner(a) {}
         TType() {}
@@ -98,4 +98,5 @@ enum class Token {
     Implement,
     For,
     Destructor,
+    Eof,
 };
