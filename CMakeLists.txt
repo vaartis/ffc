@@ -30,7 +30,7 @@ if(test)
   add_dependencies(run_tests ${DEPS})
 
   include_directories(${GTEST_INCLUDE_DIRS})
-  target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES})
+  target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES} pthread)
 else()
   file(GLOB ff_SRC "src/*.cpp")
 
