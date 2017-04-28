@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 set(CMAKE_CXX_COMPILER clang++-4.0)
-project(FF CXX)
+project(FF C CXX)
 
 include_directories("include")
 
