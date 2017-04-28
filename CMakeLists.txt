@@ -8,6 +8,18 @@ option(test "Build tests" OFF)
 
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-stdlib=libc++ -std=c++1z -Wimplicit-fallthrough")
 
+include(ExternalProject)
+
+ExternalProject_Add(Variant
+  GIT_REPOSITORY "https://github.com/mpark/variant"
+  GIT_TAG "v1.0.0"
+  PREFIX "${CMAKE_SOURCE_DIR}/deps/download/variant"
+
+  UPDATE_COMMAND ""
+  CMAKE_ARGS "-DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/variant")
+
+include_directories("deps/variant/include")
+
 if(test)
   find_package(GTest REQUIRED)
 
