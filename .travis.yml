@@ -9,4 +9,4 @@ before_install:
 - docker build -t ff .
 
 script:
-- docker run ff ./run_testst
+- docker run ff ./run_tests
