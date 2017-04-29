@@ -1,20 +1,25 @@
 cmake_minimum_required(VERSION 3.2)
 
-find_program(GCC6 "g++-6")
+project(FF C CXX)
 
-if(GCC6-NOTFOUND)
-  set(CMAKE_CXX_COMPILER "clang++-4.0")
-else()
-  set(CMAKE_CXX_COMPILER "g++-6")
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0.0")
+    message(FATAL_ERROR "At least GCC 6 is required")
+  endif()
 endif()
 
-project(FF C CXX)
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.0.0")
+    message(FATAL_ERROR "At least Clang 4 is required")
+  endif()
+  add_definitions(-Wimplicit-fallthrough)
+endif()
+
+add_definitions(-std=c++1z)
 
 include_directories("include")
 
 option(test "Build tests" OFF)
-
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-std=c++1z")
 
 include(ExternalProject)
 
