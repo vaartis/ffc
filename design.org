@@ -1,5 +1,4 @@
 * F.F. language design (kind of)
-
 ** Top level structure
 #+BEGIN_SRC BNF
 module ::= <include>
@@ -65,3 +64,37 @@ type-field-load ::= <ident> '.' <ident>
 operator ::= <expr> <operator-char>+ <expr>
 type-literal ::= <type> '{' (<ident> '=' <expr> ',')+ '}'
 #+END_SRC
+
+* Things to do
+** TODO Functions
+*** DONE Creation
+*** DONE Return results
+*** DONE Operator overloading
+*** TODO Default values
+*** TODO First class functions
+*** TODO Generics
+** TODO Include
+*** DONE Basic substitution
+*** TODO Modules/Namespaces
+** TODO Custom types
+*** DONE Creation
+*** DONE Reference types
+*** DONE In-place instance construction
+*** DONE Destructors
+*** DONE Member functions via `implement`
+*** DONE Store/Load from/into fields
+*** TODO Traits/Mixins
+** TODO Statements
+*** TODO Loops
+**** TODO For loop
+**** DONE While loop
+**** TODO "Else" like in python?
+*** DONE Return
+*** DONE Variable declaration / creation
+** DONE Expressions
+*** DONE Integer/Boolean/String literals
+*** DONE If as expression
+*** TODO Something else as expression?
+** TODO Other
+*** TODO Better error
+*** TODO Better parser
