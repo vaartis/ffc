@@ -111,7 +111,7 @@ TokenInfo TokenStream::getTok() {
             return TokenInfo(Token::FloatLit, numstr, symbol, line);
     }
 
-    #define match(wh, to, type) if (wh == to)\
+    #define match(to, type) if (IdentStr == to)\
             return TokenInfo(type, IdentStr, symbol, line);
 
     #define match_char(to, type) if (lastchr == to) {\
@@ -120,29 +120,30 @@ TokenInfo TokenStream::getTok() {
         return TokenInfo(type, IdentStr, symbol, line);\
     }
 
-    match(IdentStr, "==", Token::Operator);
-    match(IdentStr, "fnc", Token::Fnc);
-    match(IdentStr, "extern", Token::Extern);
-    match(IdentStr, "operator", Token::OperatorDef);
-    match(IdentStr, "include", Token::Include);
-    match(IdentStr, "type", Token::TypeDef);
-    match(IdentStr, "ref", Token::Ref);
-    match(IdentStr, "val", Token::Val);
-    match(IdentStr, "implement", Token::Implement);
-    match(IdentStr, "for", Token::For);
-    match(IdentStr, "destructor", Token::Destructor    );
+    match("==", Token::Operator);
+    match("fnc", Token::Fnc);
+    match("extern", Token::Extern);
+    match("operator", Token::OperatorDef);
+    match("include", Token::Include);
+    match("type", Token::TypeDef);
+    match("ref", Token::Ref);
+    match("val", Token::Val);
+    match("implement", Token::Implement);
+    match("for", Token::For);
+    match("destructor", Token::Destructor);
+
 
     if (any_of(begin(types), end(types), [&](string s) { return s == IdentStr; })) {
         return TokenInfo(Token::Type, IdentStr, symbol, line);
     }
 
-    match(IdentStr, "true", Token::BoolLit);
-    match(IdentStr, "false", Token::BoolLit);
+    match("true", Token::BoolLit);
+    match("false", Token::BoolLit);
 
-    match(IdentStr, "if", Token::If);
-    match(IdentStr, "while", Token::While);
-    match(IdentStr, "else", Token::Else);
-    match(IdentStr, "ret", Token::Ret);
+    match("if", Token::If);
+    match("while", Token::While);
+    match("else", Token::Else);
+    match("ret", Token::Ret);
 
     if (!f) {
         match_char('(', Token::OpP);
