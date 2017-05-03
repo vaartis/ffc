@@ -5,10 +5,10 @@
 TEST(While, Empty) {
     ASTParser par("fnc main() { while true { } }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
-    unique_ptr<BaseAST> wl = move(mainf->body[0]);
+    shared_ptr<BaseAST> wl = mainf->body[0];
 
     WhileAST *w = dynamic_cast<WhileAST *>(wl.get());
 
@@ -26,10 +26,10 @@ TEST(While, Empty) {
 TEST(While, BasicBody) {
     ASTParser par("fnc main() { while true { int x = 1; } }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
-    unique_ptr<BaseAST> wl = move(mainf->body[0]);
+    shared_ptr<BaseAST> wl = mainf->body[0];
 
     WhileAST *w = dynamic_cast<WhileAST *>(wl.get());
 

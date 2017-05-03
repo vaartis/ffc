@@ -25,17 +25,17 @@ vector<string> TokenStream::getTypes() {
 
 
 TokenStream::TokenStream(string s) {
-    text = make_unique<stringstream>(s);
+    text = stringstream(s);
 
     types = { "int", "float", "bool", "str" };
 
-    while (!text->eof()) {
+    while (!text.eof()) {
         vec.push_back(getTok());
     }
 }
 
 char TokenStream::getChar() {
-    char res = text->get();
+    char res = text.get();
     symbol++;
     if (res == '\n') {
         line++;
@@ -131,6 +131,7 @@ TokenInfo TokenStream::getTok() {
     match("implement", Token::Implement);
     match("for", Token::For);
     match("destructor", Token::Destructor);
+    match("generic", Token::Generic);
 
 
     if (any_of(begin(types), end(types), [&](string s) { return s == IdentStr; })) {

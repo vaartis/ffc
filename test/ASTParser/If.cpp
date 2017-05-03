@@ -4,10 +4,10 @@
 TEST(If, Empty) {
     ASTParser par("fnc main() { if true {} }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
-    unique_ptr<BaseAST> ii = move(mainf->body[0]);
+    shared_ptr<BaseAST> ii = mainf->body[0];
 
     IfAST *i = dynamic_cast<IfAST *>(ii.get());
 
@@ -25,12 +25,12 @@ TEST(If, Empty) {
 TEST(If, ReturnValue) {
     ASTParser par("fnc main() { if true { 1; 2; 3 } else { 12 } }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
     ASSERT_EQ(mainf->body.size(), 1);
 
-    unique_ptr<BaseAST> ii = move(mainf->body[0]);
+    shared_ptr<BaseAST> ii = mainf->body[0];
 
     IfAST *i = dynamic_cast<IfAST *>(ii.get());
 
@@ -53,12 +53,12 @@ TEST(If, ReturnValue) {
 TEST(If, NestedReturnValue) {
     ASTParser par("fnc main() { ret if true { if false { 1 } else { 2 } } else { 3 }; }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
     ASSERT_EQ(mainf->body.size(), 1);
 
-    unique_ptr<BaseAST> r = move(mainf->body[0]);
+    shared_ptr<BaseAST> r = mainf->body[0];
 
     RetAST *ret = dynamic_cast<RetAST *>(r.get());
 

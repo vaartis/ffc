@@ -1,7 +1,7 @@
 
 (setq ff-keywords '("fnc" "extern" "operator"
                     "include" "type" "ref" "val" "implement" "for"
-                    "destructor" "if" "while" "else" "ret"))
+                    "destructor" "if" "while" "else" "ret" "generic"))
 (setq ff-consts '("true" "false"))
 (setq ff-types '("int" "float" "bool" "str"))
 

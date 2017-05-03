@@ -4,10 +4,10 @@
 TEST(Ret, Empty) {
     ASTParser par("fnc main() { ret; }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
-    unique_ptr<BaseAST> r = move(mainf->body[0]);
+    shared_ptr<BaseAST> r = mainf->body[0];
 
     RetAST *re = dynamic_cast<RetAST *>(r.get());
 
@@ -19,10 +19,10 @@ TEST(Ret, Empty) {
 TEST(Ret, Value) {
     ASTParser par("fnc main() int { ret 0; }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
-    unique_ptr<BaseAST> r = move(mainf->body[0]);
+    shared_ptr<BaseAST> r = mainf->body[0];
 
     RetAST *re = dynamic_cast<RetAST *>(r.get());
 

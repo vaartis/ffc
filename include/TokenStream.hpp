@@ -35,7 +35,7 @@ class TokenStream {
     private:
         long line = 1, symbol = 1;
         unsigned long index = 0;
-        unique_ptr<stringstream> text;
+        stringstream text;
         vector<TokenInfo> vec;
         char lastchr = ' ';
         vector<string> types;

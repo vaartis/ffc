@@ -8,6 +8,7 @@ using std::string;
 using std::get;
 using std::shared_ptr;
 using std::make_shared;
+using std::to_string;
 
 enum class _TType {
     Int,
@@ -15,6 +16,14 @@ enum class _TType {
     Bool,
     Str,
     Void
+};
+
+/** Representation of a generic type
+ */
+class GenericType {
+    public:
+        GenericType(string nm) : name(nm) {}
+        string name;
 };
 
 /** Represents type of a value.
@@ -26,7 +35,7 @@ enum class _TType {
  */
 class TType {
     public:
-        using IT = variant<_TType, string>;
+        using IT = variant<_TType, string, GenericType>;
 
         template<class T> TType(T a) : inner(a) {}
         TType() {}
@@ -57,6 +66,32 @@ class TType {
 
         operator string() const { return get<string>(inner); }
         operator _TType() const { return get<_TType>(inner); }
+        operator GenericType() const { return get<GenericType>(inner); }
+
+        friend bool operator ==(TType &t, string &s) {
+            try {
+                return get<string>(t.inner) == s;
+            } catch (mpark::bad_variant_access&) {
+                return false;
+            }
+        }
+
+        friend bool operator ==(TType &t, GenericType &s) {
+            try {
+                return get<GenericType>(t.inner).name == s.name;
+            } catch (mpark::bad_variant_access&) {
+                return false;
+            }
+        }
+
+        bool isGeneric() {
+            try {
+                get<GenericType>(inner);
+                return true;
+            } catch (mpark::bad_variant_access&) {
+                return false;
+            }
+        }
 
         /** Type to which this type points to or nullptr. */
         shared_ptr<TType> referenceTo;
@@ -90,6 +125,7 @@ enum class Token {
     Eq, // =
     Type,
     TypeDef,
+    Generic,
     Ref,
     Val,
     Ret,

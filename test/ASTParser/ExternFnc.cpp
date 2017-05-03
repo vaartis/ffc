@@ -5,11 +5,11 @@
 TEST(ExternFnc, NoParams) {
     ASTParser par("extern test();");
 
-    vector<unique_ptr<ExternFncAST>> incls = move(par.ext_functions);
+    vector<unique_ptr<ExternFncAST>> incls = par.ext_functions;
 
     ASSERT_EQ(incls.size(), 1);
 
-    unique_ptr<ExternFncAST> ext = move(incls[0]);
+    unique_ptr<ExternFncAST> ext = incls[0];
 
     ASSERT_EQ(ext->name, "test");
     ASSERT_EQ(ext->args.size(), 0);
@@ -19,11 +19,11 @@ TEST(ExternFnc, NoParams) {
 TEST(ExternFnc, WithParamsAndRet) {
     ASTParser par("extern test(int, float) bool;");
 
-    vector<unique_ptr<ExternFncAST>> incls = move(par.ext_functions);
+    vector<unique_ptr<ExternFncAST>> incls = par.ext_functions;
 
     ASSERT_EQ(incls.size(), 1);
 
-    unique_ptr<ExternFncAST> ext = move(incls[0]);
+    unique_ptr<ExternFncAST> ext = incls[0];
 
     ASSERT_EQ(ext->name, "test");
 

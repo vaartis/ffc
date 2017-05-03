@@ -74,11 +74,11 @@ class Block {
 /** While loop AST node. */
 class WhileAST : public BaseAST {
     public:
-        WhileAST(unique_ptr<BaseAST> c, /**< Condition */
-                 vector<unique_ptr<BaseAST>> b /**< While loop body */
-                 ) : cond(move(c)), body(move(b))  {}
-        unique_ptr<BaseAST> cond;
-        vector<unique_ptr<BaseAST>> body;
+        WhileAST(shared_ptr<BaseAST> c, /**< Condition */
+                 vector<shared_ptr<BaseAST>> b /**< While loop body */
+                 ) : cond(c), body(b)  {}
+        shared_ptr<BaseAST> cond;
+        vector<shared_ptr<BaseAST>> body;
 
         void dump() {
             Print::print("While (");
@@ -129,11 +129,11 @@ class TypeFieldStoreAST : public BaseAST {
     public:
         TypeFieldStoreAST(string s_n, /**< Instance name */
                           string f_n, /**< Field name*/
-                          unique_ptr<BaseAST> v /**< Value */
-                          ) : struct_name(s_n), field_name(f_n), value(move(v)) {}
+                          shared_ptr<BaseAST> v /**< Value */
+                          ) : struct_name(s_n), field_name(f_n), value(v) {}
         string struct_name;
         string field_name;
-        unique_ptr<BaseAST> value;
+        shared_ptr<BaseAST> value;
 
         void dump() {
             Print::print("TypeFieldStore (", struct_name, ".", field_name, ") = ");
@@ -164,10 +164,10 @@ class TypeFieldLoadAST : public BaseAST {
 class TypeAST : public BaseAST {
     public:
         TypeAST(string nm, /**< Type name */
-                map<string, unique_ptr<BaseAST>> flds /**< Names of fields and their values, order is not important here */
-                ) : name(nm), fields(move(flds)) {}
+                map<string, shared_ptr<BaseAST>> flds /**< Names of fields and their values, order is not important here */
+                ) : name(nm), fields(flds) {}
         string name;
-        map<string, unique_ptr<BaseAST>> fields;
+        map<string, shared_ptr<BaseAST>> fields;
 
         void dump() {
             Print::print("Type (", name, ") {");
@@ -217,12 +217,12 @@ class IncludeAST : public BaseAST {
 class OperatorAST : public BaseAST {
     public:
         OperatorAST(string nm, /**< Operator name, e.g. `+-` */
-                    unique_ptr<BaseAST> l, /**< Value of LHS */
-                    unique_ptr<BaseAST> r /**< Value of RHS */
-                    ) : name(nm), lhs(move(l)), rhs(move(r)) {}
+                    shared_ptr<BaseAST> l, /**< Value of LHS */
+                    shared_ptr<BaseAST> r /**< Value of RHS */
+                    ) : name(nm), lhs(l), rhs(r) {}
         string name;
-        unique_ptr<BaseAST> lhs;
-        unique_ptr<BaseAST> rhs;
+        shared_ptr<BaseAST> lhs;
+        shared_ptr<BaseAST> rhs;
 
         void dump() {
             Print::print("Operator (", name, ") (LHS, RHS) {");
@@ -244,18 +244,18 @@ class OperatorAST : public BaseAST {
  */
 class IfAST : public BaseAST, public Block {
     public:
-        IfAST(unique_ptr<BaseAST> c, /**< Condition */
-              vector<unique_ptr<BaseAST>> bd, /**< `If` branch body */
-              vector<unique_ptr<BaseAST>> el, /**< `Else` branch body*/
-              unique_ptr<BaseAST> v, /**< Value of a branch if there is one or nullptr otherwise */
-              unique_ptr<BaseAST> ev /**< Likewise, but for `else`*/
-              ) : cond(move(c)), body(move(bd)), else_body(move(el)), value(move(v)), else_value(move(ev)) {}
+        IfAST(shared_ptr<BaseAST> c, /**< Condition */
+              vector<shared_ptr<BaseAST>> bd, /**< `If` branch body */
+              vector<shared_ptr<BaseAST>> el, /**< `Else` branch body*/
+              shared_ptr<BaseAST> v, /**< Value of a branch if there is one or nullptr otherwise */
+              shared_ptr<BaseAST> ev /**< Likewise, but for `else`*/
+              ) : cond(c), body(bd), else_body(el), value(v), else_value(ev) {}
 
-        unique_ptr<BaseAST> cond;
-        vector<unique_ptr<BaseAST>> body;
-        vector<unique_ptr<BaseAST>> else_body;
-        unique_ptr<BaseAST> value;
-        unique_ptr<BaseAST> else_value;
+        shared_ptr<BaseAST> cond;
+        vector<shared_ptr<BaseAST>> body;
+        vector<shared_ptr<BaseAST>> else_body;
+        shared_ptr<BaseAST> value;
+        shared_ptr<BaseAST> else_value;
 
         bool hasValue() {
             return value && else_value;
@@ -353,12 +353,13 @@ class FncDefAST : public BaseAST, public Call {
         FncDefAST(string nm, /**< Function name*/
                   deque<pair<string, TType>> ar, /**< Function arguments */
                   TType ret_t, /**< Function return type*/
-                  vector<unique_ptr<BaseAST>> bd /**< Function body */
-                 ) : name(nm), args(ar), body(move(bd)), ret_type(ret_t) {}
+                  vector<shared_ptr<BaseAST>> bd /**< Function body */
+                 ) : name(nm), args(ar), body(bd), ret_type(ret_t) {}
+        FncDefAST() {}
 
         string name;
         deque<pair<string, TType>> args;
-        vector< unique_ptr<BaseAST> > body;
+        vector< shared_ptr<BaseAST> > body;
         TType ret_type;
 
         void dump() {
@@ -394,8 +395,8 @@ class OperatorDefAST : public FncDefAST {
         OperatorDefAST(string nm, /**< Operator name, e.g. `+-!` */
                        deque<pair<string, TType>> params, /**< Name and type of LHS & RHS */
                        TType t, /**< Return type */
-                       vector<unique_ptr<BaseAST>> bd /**< Function body */
-            ) : FncDefAST(nm, params, t, move(bd)) { }
+                       vector<shared_ptr<BaseAST>> bd /**< Function body */
+            ) : FncDefAST(nm, params, t, bd) { }
 
         void dump() {
             Print::print("OperatorDef (", args.at(0).first, name, args.at(1).first, ") {");
@@ -419,10 +420,10 @@ class OperatorDefAST : public FncDefAST {
 class ImplementAST : public BaseAST {
     public:
         ImplementAST(string t, /**< Type name */
-                     vector<unique_ptr<FncDefAST>> f /**< Implemented functions */
-                     ) : type(t), fncs(move(f)) {}
+                     vector<FncDefAST> f /**< Implemented functions */
+                     ) : type(t), fncs(f) {}
         string type;
-        vector<unique_ptr<FncDefAST>> fncs;
+        vector<FncDefAST> fncs;
 
         void dump() {
             Print::print("ImplementAST (", type, ") {");
@@ -430,7 +431,7 @@ class ImplementAST : public BaseAST {
             OFFSET++;
 
             for (auto &f : fncs) {
-                f->dump();
+                f.dump();
             }
 
             OFFSET--;
@@ -442,8 +443,8 @@ class ImplementAST : public BaseAST {
 /** Represents reference to some value. */
 class RefToValAST : public BaseAST {
     public:
-        RefToValAST(unique_ptr<BaseAST> v) : value(move(v)) {}
-        unique_ptr<BaseAST> value;
+        RefToValAST(shared_ptr<BaseAST> v) : value(v) {}
+        shared_ptr<BaseAST> value;
 
         void dump() {
             Print::print("RefToVal (");
@@ -455,8 +456,8 @@ class RefToValAST : public BaseAST {
 /** Represents dereference. */
 class ValOfRefAST : public BaseAST {
     public:
-        ValOfRefAST(unique_ptr<BaseAST> v) : value(move(v)) {}
-        unique_ptr<BaseAST> value;
+        ValOfRefAST(shared_ptr<BaseAST> v) : value(v) {}
+        shared_ptr<BaseAST> value;
 
         void dump() {
             Print::print("ValOfRef (");
@@ -489,12 +490,12 @@ class ExternFncAST : public BaseAST {
 class FncCallAST : public BaseAST {
     public:
         FncCallAST(string nm, /**< Function name */
-                   deque<unique_ptr<BaseAST>> ar, /**< Function arguments */
+                   deque<shared_ptr<BaseAST>> ar, /**< Function arguments */
                    string t = "" /**< Type, to which this function belongs or an empty string*/
-                   ) : name(nm), args(move(ar)), type(t) {}
+                   ) : name(nm), args(ar), type(t) {}
 
         string name;
-        deque<unique_ptr<BaseAST>> args;
+        deque<shared_ptr<BaseAST>> args;
         string type;
 
         void dump() {
@@ -515,11 +516,11 @@ class FncCallAST : public BaseAST {
 /** Declaration of a variable and optionally it's value. */
 class DeclAST : public BaseAST {
     public:
-        DeclAST(string nm, TType ty, unique_ptr<BaseAST> val) : name(nm), type(ty), value(move(val)) {}
+        DeclAST(string nm, TType ty, shared_ptr<BaseAST> val) : name(nm), type(ty), value(val) {}
 
         string name;
         TType type;
-        unique_ptr<BaseAST> value;
+        shared_ptr<BaseAST> value;
 
         void dump() {
             Print::print("Decl (", name, ") {");
@@ -537,9 +538,9 @@ class DeclAST : public BaseAST {
 /** Assignments to a variable. */
 class AssAST : public BaseAST {
     public:
-        AssAST(string nm, unique_ptr<BaseAST> val) : name(nm), value(move(val)) {}
+        AssAST(string nm, shared_ptr<BaseAST> val) : name(nm), value(val) {}
         string name;
-        unique_ptr<BaseAST> value;
+        shared_ptr<BaseAST> value;
 
          void dump() {
              Print::print("Assign (", name, ") {");
@@ -568,8 +569,8 @@ class IdentAST : public BaseAST {
 /** Represents returning some value from a function. */
 class RetAST : public BaseAST {
     public:
-        RetAST(unique_ptr<BaseAST> v) : value(move(v)) {}
-        unique_ptr<BaseAST> value;
+        RetAST(shared_ptr<BaseAST> v) : value(v) {}
+        shared_ptr<BaseAST> value;
 
         void dump() {
             Print::print("Ret (");

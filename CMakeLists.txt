@@ -38,7 +38,7 @@ include_directories(
   )
 
 add_definitions(
-  -std=c++1z
+  -std=c++1z -g
   ${LLVM_DEFINITIONS}
   )
 

@@ -35,13 +35,14 @@ class ASTParser {
         ASTParser(string s);
         ~ASTParser() {}
 
-        vector<unique_ptr<FncDefAST>> functions; /**< Top level functions */
-        vector<unique_ptr<ExternFncAST>> ext_functions; /**< Externs */
-        vector<unique_ptr<OperatorDefAST>> operators; /**< Operator definitions */
-        vector<unique_ptr<IncludeAST>> includes; /**< Includes */
-        vector<unique_ptr<ImplementAST>> impls; /**< Implementations of functions for some types */
-        map<string, std::shared_ptr<TypeDefAST>> typedefs; /**< Custom type definitions */
+        vector<FncDefAST> functions; /**< Top level functions */
+        vector<ExternFncAST> ext_functions; /**< Externs */
+        vector<OperatorDefAST> operators; /**< Operator definitions */
+        vector<IncludeAST> includes; /**< Includes */
+        vector<ImplementAST> impls; /**< Implementations of functions for some types */
+        map<string, TypeDefAST> typedefs; /**< Custom type definitions */
 
+        map<string, vector<string>> generic_types; /**< Generic types of functions */
     private:
         TokenStream tokens; /**< Inner TokenStream, which basically holds whole programm's tokenized code */
 
@@ -58,20 +59,19 @@ class ASTParser {
 
         TType parseTType();
 
-        unique_ptr<IncludeAST> parseInclude();
-        unique_ptr<FncDefAST> parseFncDef();
-        unique_ptr<ExternFncAST> parseExternFnc();
-        unique_ptr<OperatorDefAST> parseOperatorDef();
-        unique_ptr<ImplementAST> parseImplement();
+        IncludeAST parseInclude();
+        template<class T> T parseFncDef();
+        ExternFncAST parseExternFnc();
+        ImplementAST parseImplement();
         void parseTypeDef();
 
-        #define gen_parse(wh, ...) unique_ptr<BaseAST> parse##wh(__VA_ARGS__);
+        #define gen_parse(wh, ...) shared_ptr<BaseAST> parse##wh(__VA_ARGS__);
 
-        deque<pair<string, TType>> parseParams();
+        string curr_fn_name;
 
-        vector<unique_ptr<BaseAST>> parseFncBody();
+        vector<shared_ptr<BaseAST>> parseFncBody();
 
-        pair<vector<unique_ptr<BaseAST>>, unique_ptr<BaseAST>> parseBlock();
+        pair<vector<shared_ptr<BaseAST>>, shared_ptr<BaseAST>> parseBlock();
 
         gen_parse(Var, TType)
         gen_parse(Ass)
@@ -95,5 +95,5 @@ class ASTParser {
         gen_parse(If)
         gen_parse(While)
 
-        gen_parse(Operator, unique_ptr<BaseAST>)
+        gen_parse(Operator, shared_ptr<BaseAST>)
 };

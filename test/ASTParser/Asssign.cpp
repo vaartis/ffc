@@ -4,12 +4,12 @@
 TEST(Assign, Simple){
     ASTParser par("fnc main() { x = 1; }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
     ASSERT_EQ(mainf->body.size(), 1);
 
-    unique_ptr<BaseAST> as = move(mainf->body[0]);
+    shared_ptr<BaseAST> as = mainf->body[0];
 
     AssAST *assign = dynamic_cast<AssAST *>(as.get());
 
@@ -26,12 +26,12 @@ TEST(Assign, Simple){
 TEST(Assign, Variable) {
     ASTParser par("fnc main() { y = x; }");
 
-    vector<unique_ptr<FncDefAST>> fns = move(par.functions);
-    unique_ptr<FncDefAST> mainf = move(fns[0]);
+    vector<unique_ptr<FncDefAST>> fns = par.functions;
+    unique_ptr<FncDefAST> mainf = fns[0];
 
     ASSERT_EQ(mainf->body.size(), 1);
 
-    unique_ptr<BaseAST> as = move(mainf->body[0]);
+    shared_ptr<BaseAST> as = mainf->body[0];
 
     AssAST *assign = dynamic_cast<AssAST *>(as.get());
 
