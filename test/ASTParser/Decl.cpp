@@ -4,12 +4,12 @@
 TEST(Declaration, Empty){
     ASTParser par("fnc main() { str x; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.functions;
-    unique_ptr<FncDefAST> mainf = fns[0];
+    vector<FncDefAST> fns = par.functions;
+    FncDefAST mainf = fns[0];
 
-    ASSERT_EQ(mainf->body.size(), 1);
+    ASSERT_EQ(mainf.body.size(), 1);
 
-    shared_ptr<BaseAST> d = mainf->body[0];
+    shared_ptr<BaseAST> d = mainf.body[0];
 
     DeclAST *decl = dynamic_cast<DeclAST *>(d.get());
 
@@ -20,12 +20,12 @@ TEST(Declaration, Empty){
 TEST(Declaration, Simple) {
     ASTParser par("fnc main() { str x = 10; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.functions;
-    unique_ptr<FncDefAST> mainf = fns[0];
+    vector<FncDefAST> fns = par.functions;
+    FncDefAST mainf = fns[0];
 
-    ASSERT_EQ(mainf->body.size(), 1);
+    ASSERT_EQ(mainf.body.size(), 1);
 
-    shared_ptr<BaseAST> d = mainf->body[0];
+    shared_ptr<BaseAST> d = mainf.body[0];
 
     DeclAST *decl = dynamic_cast<DeclAST *>(d.get());
 
@@ -40,13 +40,13 @@ TEST(Declaration, Simple) {
 TEST(Declaration, MultipleVariables) {
     ASTParser par("fnc main() { str x = y; str y = x; }");
 
-    vector<unique_ptr<FncDefAST>> fns = par.functions;
-    unique_ptr<FncDefAST> mainf = fns[0];
+    vector<FncDefAST> fns = par.functions;
+    FncDefAST mainf = fns[0];
 
-    ASSERT_EQ(mainf->body.size(), 2);
+    ASSERT_EQ(mainf.body.size(), 2);
 
-    shared_ptr<BaseAST> first = mainf->body[0];
-    shared_ptr<BaseAST> second = mainf->body[1];
+    shared_ptr<BaseAST> first = mainf.body[0];
+    shared_ptr<BaseAST> second = mainf.body[1];
 
     DeclAST *dfirst = dynamic_cast<DeclAST *>(first.get());
     DeclAST *dsecond = dynamic_cast<DeclAST *>(second.get());
