@@ -19,11 +19,12 @@ RUN apt-get update
 RUN apt-get -y install build-essential wget pkg-config software-properties-common # Install essential packages
 RUN wget -O - http://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
 RUN add-apt-repository "deb http://apt.llvm.org/zesty/ llvm-toolchain-zesty-4.0 main"
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt-get update
 
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt-get update
-RUN apt-get install -y gcc-6 g++-6
+RUN apt-get install -y gcc-7
 
 RUN apt-get install -y llvm-4.0 llvm-4.0-dev lvm-4.0-runtime
 

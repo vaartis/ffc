@@ -6,8 +6,8 @@ include(ExternalProject)
 option(test "Build tests" OFF)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "6.0.0")
-    message(FATAL_ERROR "At least GCC 6 is required")
+  if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.0.0")
+    message(FATAL_ERROR "At least GCC 7 is required")
   endif()
 endif()
 
