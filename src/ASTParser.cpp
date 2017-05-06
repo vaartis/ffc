@@ -746,7 +746,6 @@ shared_ptr<BaseAST> ASTParser::parseTypeFieldLoad(shared_ptr<BaseAST> st /**< In
 
     auto from_expr = dynamic_cast<Expression *>(st.get());
 
-    from_expr->expression_type.dump();
     assert(from_expr->expression_type.isCustom());
 
     auto res = make_shared<TypeFieldLoadAST>(st, f_name);
