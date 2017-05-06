@@ -3,7 +3,7 @@
 #include "ParserShared.hpp"
 
 TEST(OperatorDef, IntPlusStr) {
-    ASTParser par("operator +(int x, str y) int { }");
+    ASTParser par("operator +(int x, str y) int { ret x; }");
 
     vector<OperatorDefAST> ops = par.operators;
 
@@ -15,7 +15,7 @@ TEST(OperatorDef, IntPlusStr) {
     ASSERT_EQ(op.args[0].second, _TType::Int);
     ASSERT_EQ(op.args[1].second, _TType::Str);
 
-    ASSERT_EQ(op.body.size(), 0);
+    ASSERT_EQ(op.body.size(), 1);
 }
 
 TEST(OperatorDef, RefIntPlusRefStr) {

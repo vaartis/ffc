@@ -87,7 +87,9 @@ class ASTParser {
         map<string, TypedName> curr_defined_variables;
 
         vector<shared_ptr<BaseAST>> parseFncBody();
-        deque<pair<string, TType>> parseFncArgs(optional<map<string, TypedName>> where);
+
+        deque<pair<string, TType>> parseFncArgs();
+        deque<pair<string, TType>> parseFncArgs(map<string, TypedName> &where);
 
         pair<vector<shared_ptr<BaseAST>>, shared_ptr<BaseAST>> parseBlock();
 

@@ -389,7 +389,11 @@ vector<shared_ptr<BaseAST>> ASTParser::parseFncBody() {
     return body;
 }
 
-deque<pair<string, TType>> ASTParser::parseFncArgs(optional<map<string, TypedName>> where = nullopt) {
+deque<pair<string, TType>> ASTParser::parseFncArgs() {
+    return parseFncArgs(curr_defined_variables);
+}
+
+deque<pair<string, TType>> ASTParser::parseFncArgs(map<string, TypedName> &where) {
     assert(currTok == Token::OpP);
 
     getNextTok(); // eat (
@@ -403,10 +407,7 @@ deque<pair<string, TType>> ASTParser::parseFncArgs(optional<map<string, TypedNam
         getNextTok();
 
         args.push_back({name, tp});
-        if (where.has_value())
-            where.value().emplace(name, TypedName(name, tp));
-        else
-            curr_defined_variables.emplace(name, TypedName(name, tp));
+        where.emplace(name, TypedName(name, tp));
 
         if (currTok != Token::ClP) {
             assert(currTok == Token::Comma);

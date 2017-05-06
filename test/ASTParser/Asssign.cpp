@@ -24,14 +24,14 @@ TEST(Assign, Simple){
 }
 
 TEST(Assign, Variable) {
-    ASTParser par("fnc main() { y = x; }");
+    ASTParser par("fnc main() { int x = 10; int y; y = x; }");
 
     vector<FncDefAST> fns = par.functions;
     FncDefAST mainf = fns[0];
 
-    ASSERT_EQ(mainf.body.size(), 1);
+    ASSERT_EQ(mainf.body.size(), 3);
 
-    shared_ptr<BaseAST> as = mainf.body[0];
+    shared_ptr<BaseAST> as = mainf.body[2];
 
     AssAST *assign = dynamic_cast<AssAST *>(as.get());
 
