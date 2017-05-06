@@ -16,7 +16,7 @@ using std::ostream;
 using std::cout;
 using std::endl;
 
-unsigned static int OFFSET = 0;
+static unsigned int OFFSET = 0;
 static bool WAS_O = false;
 
 /** Offset-aware text printer.
@@ -69,6 +69,20 @@ class Block {
     public:
         /** True, if this block returns some value */
         virtual bool hasValue() = 0;
+};
+
+/** Represents some expression with a type */
+class Expression {
+    public:
+        TType expression_type = _TType::Void;
+};
+
+/** Represents, basically, a variable and it's type */
+class TypedName {
+    public:
+        TypedName(string n, TType tp) : name(n), type(tp) {}
+        string name;
+        TType type;
 };
 
 /** While loop AST node. */
@@ -147,7 +161,7 @@ class TypeFieldStoreAST : public BaseAST {
 };
 
 /** AST node that represents loading a value from type's field. */
-class TypeFieldLoadAST : public BaseAST {
+class TypeFieldLoadAST : public BaseAST, public Expression {
     public:
         TypeFieldLoadAST(string st_n, /**< Instance name */
                          string f_n /**< Field name */
@@ -161,7 +175,7 @@ class TypeFieldLoadAST : public BaseAST {
 };
 
 /** This node represents in-place creation of a type instance */
-class TypeAST : public BaseAST {
+class TypeAST : public BaseAST, public Expression {
     public:
         TypeAST(string nm, /**< Type name */
                 map<string, shared_ptr<BaseAST>> flds /**< Names of fields and their values, order is not important here */
@@ -214,7 +228,7 @@ class IncludeAST : public BaseAST {
 };
 
 /** AST node that represents usage of an operator */
-class OperatorAST : public BaseAST {
+class OperatorAST : public BaseAST, public Expression {
     public:
         OperatorAST(string nm, /**< Operator name, e.g. `+-` */
                     shared_ptr<BaseAST> l, /**< Value of LHS */
@@ -242,7 +256,7 @@ class OperatorAST : public BaseAST {
  * compiler checks if it does and forces users to write an else branch.
  * Value can be returned by ommiting the semicolon after the last expression in if/else block
  */
-class IfAST : public BaseAST, public Block {
+class IfAST : public BaseAST, public Block, public Expression {
     public:
         IfAST(shared_ptr<BaseAST> c, /**< Condition */
               vector<shared_ptr<BaseAST>> bd, /**< `If` branch body */
@@ -297,7 +311,7 @@ class IfAST : public BaseAST, public Block {
 };
 
 /** Integer literal. */
-class IntAST : public BaseAST {
+class IntAST : public BaseAST, public Expression {
     public:
         IntAST(int i) : value(i) {}
 
@@ -309,7 +323,7 @@ class IntAST : public BaseAST {
 };
 
 /** Float literal. */
-class FloatAST : public BaseAST {
+class FloatAST : public BaseAST, public Expression {
     public:
         FloatAST(float f) : value(f) {}
 
@@ -321,7 +335,7 @@ class FloatAST : public BaseAST {
 };
 
 /** String literal. */
-class StrAST : public BaseAST {
+class StrAST : public BaseAST, public Expression {
     public:
         StrAST(string s) : value(s) {}
 
@@ -333,7 +347,7 @@ class StrAST : public BaseAST {
 };
 
 /** Boolean literal. */
-class BoolAST : public BaseAST {
+class BoolAST : public BaseAST, public Expression {
     public:
         BoolAST(bool b) : value(b) {}
 
@@ -343,7 +357,107 @@ class BoolAST : public BaseAST {
             Print::print(value);
         }
 };
-/** .Node that represents function definition.
+
+/** Represents reference to some value. */
+class RefToValAST : public BaseAST, public Expression {
+    public:
+        RefToValAST(shared_ptr<BaseAST> v) : value(v) {}
+        shared_ptr<BaseAST> value;
+
+        void dump() {
+            Print::print("RefToVal (");
+            value->dump();
+            Print::print(")");
+        }
+};
+
+/** Represents dereference. */
+class ValOfRefAST : public BaseAST, public Expression {
+    public:
+        ValOfRefAST(shared_ptr<BaseAST> v) : value(v) {}
+        shared_ptr<BaseAST> value;
+
+        void dump() {
+            Print::print("ValOfRef (");
+            value->dump();
+            Print::print(")");
+        }
+};
+
+/** Represents definition of some external function. */
+class ExternFncAST : public BaseAST {
+    public:
+        ExternFncAST(string s, /**< Function name */
+                     vector<TType> ar, /**< Function arguments' types */
+                     TType r /**< Return type*/
+                     ) : name(s), args(ar), ret_type(r) {}
+
+        string name;
+        vector<TType> args;
+        TType ret_type;
+
+        void dump() {
+            Print::print("ExternFnc (", name, ")");
+        }
+};
+
+/** Represents a call to some function.
+ *
+ * Deque is needed for an implicit type parameter
+ */
+class FncCallAST : public BaseAST, public Expression {
+    public:
+        FncCallAST(string nm, /**< Function name */
+                   deque<shared_ptr<BaseAST>> ar, /**< Function arguments */
+                   string t = "" /**< Type, to which this function belongs or an empty string*/
+                   ) : name(nm), args(ar), type(t) {}
+
+        string name;
+        deque<shared_ptr<BaseAST>> args;
+        string type;
+
+        bool operator ==(FncCallAST &other) {
+            return (name == other.name) && (args == other.args) && (type == other.type);
+        }
+
+        void dump() {
+            Print::print("FncCall (", name, ")", "(");
+
+            OFFSET++;
+
+            for (auto &ar : args) {
+                ar->dump();
+            }
+
+            OFFSET--;
+
+            Print::print(")");
+        }
+};
+
+/** Declaration of a variable and optionally it's value. */
+class DeclAST : public BaseAST {
+    public:
+        DeclAST(string nm, TType ty, shared_ptr<BaseAST> val) : name(nm), type(ty), value(val) {}
+
+        string name;
+        TType type;
+        shared_ptr<BaseAST> value;
+
+        void dump() {
+            Print::print("Decl (", name, ") {");
+
+            OFFSET++;
+
+            value->dump();
+
+            OFFSET--;
+
+            Print::print("}");
+        }
+};
+
+/** Node that represents function definition.
  *
  * `Deque` is needed to insert implicit type parameter
  * when function is defined inside of `implement`
@@ -353,14 +467,16 @@ class FncDefAST : public BaseAST, public Call {
         FncDefAST(string nm, /**< Function name*/
                   deque<pair<string, TType>> ar, /**< Function arguments */
                   TType ret_t, /**< Function return type*/
-                  vector<shared_ptr<BaseAST>> bd /**< Function body */
-                 ) : name(nm), args(ar), body(bd), ret_type(ret_t) {}
+                  vector<shared_ptr<BaseAST>> bd, /**< Function body */
+                  map<string, TypedName> d_v
+                  ) : name(nm), args(ar), body(bd), ret_type(ret_t), defined_variables(d_v) {}
         FncDefAST() {}
 
         string name;
         deque<pair<string, TType>> args;
-        vector< shared_ptr<BaseAST> > body;
+        vector<shared_ptr<BaseAST>> body;
         TType ret_type;
+        map<string, TypedName> defined_variables;
 
         void dump() {
             Print::print("FncDef (", name, ") (");
@@ -392,11 +508,15 @@ class FncDefAST : public BaseAST, public Call {
 /** Node that represents definition of an operator. */
 class OperatorDefAST : public FncDefAST {
     public:
-        OperatorDefAST(string nm, /**< Operator name, e.g. `+-!` */
+        OperatorDefAST(string nm, /**< Operator full name, e.g. `int+-!int` */
+                       string b_n, /**< Operator base name, e.g. `+-!` */
                        deque<pair<string, TType>> params, /**< Name and type of LHS & RHS */
                        TType t, /**< Return type */
-                       vector<shared_ptr<BaseAST>> bd /**< Function body */
-            ) : FncDefAST(nm, params, t, bd) { }
+                       vector<shared_ptr<BaseAST>> bd, /**< Function body */
+                       map<string, TypedName> d_v
+            ) : FncDefAST(nm, params, t, bd, d_v), base_name(b_n) { }
+
+        string base_name;
 
         void dump() {
             Print::print("OperatorDef (", args.at(0).first, name, args.at(1).first, ") {");
@@ -440,101 +560,6 @@ class ImplementAST : public BaseAST {
         }
 };
 
-/** Represents reference to some value. */
-class RefToValAST : public BaseAST {
-    public:
-        RefToValAST(shared_ptr<BaseAST> v) : value(v) {}
-        shared_ptr<BaseAST> value;
-
-        void dump() {
-            Print::print("RefToVal (");
-            value->dump();
-            Print::print(")");
-        }
-};
-
-/** Represents dereference. */
-class ValOfRefAST : public BaseAST {
-    public:
-        ValOfRefAST(shared_ptr<BaseAST> v) : value(v) {}
-        shared_ptr<BaseAST> value;
-
-        void dump() {
-            Print::print("ValOfRef (");
-            value->dump();
-            Print::print(")");
-        }
-};
-
-/** Represents definition of some external function. */
-class ExternFncAST : public BaseAST {
-    public:
-        ExternFncAST(string s, /**< Function name */
-                     vector<TType> ar, /**< Function arguments' types */
-                     TType r /**< Return type*/
-                     ) : name(s), args(ar), ret_type(r) {}
-
-        string name;
-        vector<TType> args;
-        TType ret_type;
-
-        void dump() {
-            Print::print("ExternFnc (", name, ")");
-        }
-};
-
-/** Represents a call to some function.
- *
- * Deque is needed for an implicit type parameter
- */
-class FncCallAST : public BaseAST {
-    public:
-        FncCallAST(string nm, /**< Function name */
-                   deque<shared_ptr<BaseAST>> ar, /**< Function arguments */
-                   string t = "" /**< Type, to which this function belongs or an empty string*/
-                   ) : name(nm), args(ar), type(t) {}
-
-        string name;
-        deque<shared_ptr<BaseAST>> args;
-        string type;
-
-        void dump() {
-            Print::print("FncCall (", name, ")", "(");
-
-            OFFSET++;
-
-            for (auto &ar : args) {
-                ar->dump();
-            }
-
-            OFFSET--;
-
-            Print::print(")");
-        }
-};
-
-/** Declaration of a variable and optionally it's value. */
-class DeclAST : public BaseAST {
-    public:
-        DeclAST(string nm, TType ty, shared_ptr<BaseAST> val) : name(nm), type(ty), value(val) {}
-
-        string name;
-        TType type;
-        shared_ptr<BaseAST> value;
-
-        void dump() {
-            Print::print("Decl (", name, ") {");
-
-            OFFSET++;
-
-            value->dump();
-
-            OFFSET--;
-
-            Print::print("}");
-        }
-};
-
 /** Assignments to a variable. */
 class AssAST : public BaseAST {
     public:
@@ -556,7 +581,7 @@ class AssAST : public BaseAST {
 };
 
 /** Identifier, e.g. variable name. */
-class IdentAST : public BaseAST {
+class IdentAST : public BaseAST, public Expression {
     public:
         IdentAST(string v) : value(v) {}
         string value;

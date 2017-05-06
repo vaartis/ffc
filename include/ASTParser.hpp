@@ -5,18 +5,30 @@
 #include <string>
 #include <vector>
 #include <sstream>
+#include <tuple>
+#include <optional>
 
 #include "ParserShared.hpp"
 #include "AST.hpp"
 #include "TokenStream.hpp"
 
 using std::string;
-using std::unique_ptr;
+using std::shared_ptr;
 using std::vector;
 using std::map;
+using std::multimap;
 using std::pair;
 using std::exception;
 using std::stringstream;
+using std::tuple;
+using std::optional;
+
+class GenericFncInfo {
+    public:
+        GenericFncInfo(FncDefAST fnc, vector<string> tps) : function(fnc), generic_types(tps) {}
+        FncDefAST function;
+        vector<string> generic_types;
+};
 
 /** Class that parses tokens and forms an AST
  *
@@ -42,7 +54,9 @@ class ASTParser {
         vector<ImplementAST> impls; /**< Implementations of functions for some types */
         map<string, TypeDefAST> typedefs; /**< Custom type definitions */
 
-        map<string, vector<string>> generic_types; /**< Generic types of functions */
+        map<string, vector<string>> generic_types;
+        map<string, GenericFncInfo> generic_fncs;
+        multimap<string, FncCallAST> generic_uses;
     private:
         TokenStream tokens; /**< Inner TokenStream, which basically holds whole programm's tokenized code */
 
@@ -60,7 +74,9 @@ class ASTParser {
         TType parseTType();
 
         IncludeAST parseInclude();
-        template<class T> T parseFncDef();
+        FncDefAST parseFncDef();
+        OperatorDefAST parseOperatorDef();
+        GenericFncInfo parseGenericFncDef();
         ExternFncAST parseExternFnc();
         ImplementAST parseImplement();
         void parseTypeDef();
@@ -68,8 +84,10 @@ class ASTParser {
         #define gen_parse(wh, ...) shared_ptr<BaseAST> parse##wh(__VA_ARGS__);
 
         string curr_fn_name;
+        map<string, TypedName> curr_defined_variables;
 
         vector<shared_ptr<BaseAST>> parseFncBody();
+        deque<pair<string, TType>> parseFncArgs(optional<map<string, TypedName>> where);
 
         pair<vector<shared_ptr<BaseAST>>, shared_ptr<BaseAST>> parseBlock();
 
@@ -81,11 +99,13 @@ class ASTParser {
         gen_parse(BoolLiteral)
         gen_parse(StrLiteral)
 
+        gen_parse(RefToVal);
 
         gen_parse(TypeFieldStore, string)
         gen_parse(TypeFieldLoad, string)
         gen_parse(TypeFncCall, string)
 
+        gen_parse(Ident);
         gen_parse(Type)
         gen_parse(Stmt, bool)
         gen_parse(Val)

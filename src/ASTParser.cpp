@@ -5,6 +5,8 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <tuple>
+#include <optional>
 
 #include <assert.h>
 
@@ -32,10 +34,10 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
             case Token::Eof:
                 goto end;
             case Token::Fnc:
-                functions.push_back(parseFncDef<FncDefAST>());
+                functions.push_back(parseFncDef());
                 break;
             case Token::OperatorDef:
-                operators.push_back(parseFncDef<OperatorDefAST>());
+                operators.push_back(parseOperatorDef());
                 break;
             case Token::Extern:
                 ext_functions.push_back(parseExternFnc());
@@ -50,6 +52,12 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                 parseTypeDef();
                 break;
             default:
+                if (currTok == Token::Generic) {
+                    auto r = parseGenericFncDef();
+                    generic_fncs.emplace(r.function.name, r);
+                    continue;
+                }
+
                 if (IdentStr.length() > 0)
                     cerr << "WARNING: unknown toplevel token " << IdentStr << endl;
                 getNextTok();
@@ -104,7 +112,7 @@ TType ASTParser::parseTType() {
             throw runtime_error("Unknown type:" + s);
     } else if (currTok == Token::Ref) {
         getNextTok();
-        return TType::withRef(make_shared<TType>(parseTType()));
+        return TType::withRef(new TType(parseTType()));
     } else {
          throw runtime_error("Expected TYPE at " + to_string(line) + ":" + to_string(symbol));
     }
@@ -203,10 +211,13 @@ ImplementAST ASTParser::parseImplement() {
         FncDefAST curr_fnc;
 
         if (currTok == Token::Fnc) {
-            curr_fnc = parseFncDef<FncDefAST>();
+            curr_fnc = parseFncDef();
         } else if (currTok == Token::Destructor) {
             getNextTok(); // eat destructor
-            curr_fnc = FncDefAST("destructor", deque<pair<string, TType>>{}, _TType::Void, parseFncBody());
+
+            auto body = parseFncBody();
+
+            curr_fnc = FncDefAST("destructor", deque<pair<string, TType>>{}, _TType::Void, body, curr_defined_variables);
         } else {
             throw runtime_error("Unknown token in IMPLEMENT");
         }
@@ -292,6 +303,7 @@ IncludeAST ASTParser::parseInclude() {
 shared_ptr<BaseAST> ASTParser::parseStrLiteral() {
     auto res = make_shared<StrAST>(IdentStr);
     getNextTok();
+    res->expression_type = _TType::Str;
     return res;
 }
 
@@ -299,6 +311,7 @@ shared_ptr<BaseAST> ASTParser::parseStrLiteral() {
 shared_ptr<BaseAST> ASTParser::parseIntLiteral() {
     auto res = make_shared<IntAST>(stoi(IdentStr));
     getNextTok();
+    res->expression_type = _TType::Int;
     return res;
 }
 
@@ -306,6 +319,7 @@ shared_ptr<BaseAST> ASTParser::parseIntLiteral() {
 shared_ptr<BaseAST> ASTParser::parseFloatLiteral() {
     auto res = make_shared<FloatAST>(stof(IdentStr));
     getNextTok();
+    res->expression_type = _TType::Float;
     return res;
 }
 
@@ -314,6 +328,7 @@ shared_ptr<BaseAST> ASTParser::parseBoolLiteral() {
     bool b = (IdentStr == "true") ? true : false;
     auto res = make_shared<BoolAST>(b);
     getNextTok();
+    res->expression_type = _TType::Bool;
 
     return res;
 }
@@ -365,9 +380,11 @@ vector<shared_ptr<BaseAST>> ASTParser::parseFncBody() {
     getNextTok(); //eat {
 
     vector<shared_ptr<BaseAST>> body;
-
     while (currTok != Token::ClCB) {
-        body.push_back(parseStmt());
+        auto res = parseStmt();
+        body.push_back(res);
+        if (auto d = dynamic_cast<DeclAST *>(res.get()))
+            curr_defined_variables.emplace(d->name, TypedName(d->name, d->type));
     }
 
     getNextTok(); // eat }
@@ -375,32 +392,22 @@ vector<shared_ptr<BaseAST>> ASTParser::parseFncBody() {
     return body;
 }
 
-/** Parses function or operator definition. */
-template<class T> T ASTParser::parseFncDef() {
-    Token type = currTok;
-    getNextTok(); // eat fnc
+GenericFncInfo ASTParser::parseGenericFncDef() {
+    getNextTok(); // eat generic, don't eat fnc
 
     vector<string> generics;
-    if (currTok == Token::Generic) {
-        while (!(if_ident(currTok,IdentStr) && tokens.peek().tok == Token::OpP)) {
-            getNextTok();
-            assert(if_ident(currTok, IdentStr));
-            generics.push_back(IdentStr);
-            getNextTok();
-            if (!(if_ident(currTok,IdentStr) && tokens.peek().tok == Token::OpP)) {
-                assert(currTok == Token::Comma);
-            }
+    while (!(if_ident(currTok,IdentStr) && tokens.peek().tok == Token::OpP)) {
+        getNextTok();
+        assert(if_ident(currTok, IdentStr));
+        generics.push_back(IdentStr);
+        getNextTok();
+        if (!(if_ident(currTok,IdentStr) && tokens.peek().tok == Token::OpP)) {
+            assert(currTok == Token::Comma);
         }
     }
 
-    if (type == Token::Fnc)
-        assert(if_ident(currTok, IdentStr));
-    else if (type == Token::OperatorDef)
-        assert(currTok == Token::Operator);
-
     string name = IdentStr;
     curr_fn_name = name;
-
     generic_types.emplace(name, generics);
 
     getNextTok();
@@ -418,6 +425,7 @@ template<class T> T ASTParser::parseFncDef() {
         getNextTok();
 
         args.push_back({name, tp});
+        curr_defined_variables.emplace(name, TypedName(name, tp));
 
         if (currTok != Token::ClP) {
             assert(currTok == Token::Comma);
@@ -427,21 +435,104 @@ template<class T> T ASTParser::parseFncDef() {
     }
     getNextTok(); // eat )
 
-    if (type == Token::OperatorDef)
-        assert(args.size() == 2 && "More then two arguments for an operator!");
-
     TType ret_type = _TType::Void;
 
     if (if_type(currTok, IdentStr) || find(generics.begin(), generics.end(), IdentStr) != generics.end()) {
         ret_type = parseTType();
     }
 
-    vector<shared_ptr<BaseAST>> body = parseFncBody();
+    auto body = parseFncBody();
 
-    if (type == Token::Fnc)
-        return T(name, args, ret_type, body);
-    else
-        return T(name, args, ret_type, body);
+    return GenericFncInfo(FncDefAST(name, args, ret_type, body, curr_defined_variables), generics);
+}
+
+deque<pair<string, TType>> ASTParser::parseFncArgs(optional<map<string, TypedName>> where = nullopt) {
+    assert(currTok == Token::OpP);
+
+    getNextTok(); // eat (
+
+    deque<pair<string, TType>> args;
+    while (currTok != Token::ClP) {
+        TType tp = parseTType();
+
+        assert(if_ident(currTok, IdentStr));
+        string name = IdentStr;
+        getNextTok();
+
+        args.push_back({name, tp});
+        if (where.has_value())
+            where.value().emplace(name, TypedName(name, tp));
+        else
+            curr_defined_variables.emplace(name, TypedName(name, tp));
+
+        if (currTok != Token::ClP) {
+            assert(currTok == Token::Comma);
+            getNextTok();
+        }
+
+    }
+    getNextTok(); // eat )
+
+    return args;
+}
+
+OperatorDefAST ASTParser::parseOperatorDef() {
+    getNextTok(); // eat operator
+
+    assert(currTok == Token::Operator);
+
+    string name = IdentStr;
+
+    getNextTok();
+
+    map<string, TypedName> tmp_curr_defined_variables;
+    auto args = parseFncArgs(tmp_curr_defined_variables);
+
+    assert(args.size() == 2 && "More then two arguments for an operator!");
+
+    TType ret_type = _TType::Void;
+
+    if (if_type(currTok, IdentStr)) {
+        ret_type = parseTType();
+    }
+
+    string base_name = name;
+    name = args[0].second.to_string() + name + args[1].second.to_string();
+
+    curr_fn_name = name;
+    curr_defined_variables = tmp_curr_defined_variables;
+
+    auto body = parseFncBody();
+
+    auto res =  OperatorDefAST(name, base_name, args, ret_type, body, curr_defined_variables);
+    curr_defined_variables.clear();
+    return res;
+}
+
+/** Parses function definition. */
+FncDefAST ASTParser::parseFncDef() {
+    getNextTok(); // eat fnc
+
+    assert(if_ident(currTok, IdentStr));
+
+    string name = IdentStr;
+    curr_fn_name = name;
+
+    getNextTok();
+
+    auto args = parseFncArgs();
+
+    TType ret_type = _TType::Void;
+
+    if (if_type(currTok, IdentStr)) {
+        ret_type = parseTType();
+    }
+
+    auto body = parseFncBody();
+
+    auto res =  FncDefAST(name, args, ret_type, body, curr_defined_variables);
+    curr_defined_variables.clear();
+    return res;
 }
 
 /** Parses function's return statements. */
@@ -463,10 +554,16 @@ shared_ptr<BaseAST> ASTParser::parseVal() {
         } else if (tokens.peek().tok == Token::Dot) {
             return make_shared<ValOfRefAST>(parseTypeFieldStore(IdentStr));
         } else {
-            return make_shared<ValOfRefAST>(parseExpr());
+            goto exit;
         }
     } else {
-        return make_shared<ValOfRefAST>(parseExpr());
+    exit:
+        auto res = make_shared<ValOfRefAST>(parseExpr());
+
+        auto v = dynamic_cast<Expression *>(res->value.get());
+        res->expression_type = v->expression_type;
+
+        return res;
     }
 }
 
@@ -534,7 +631,48 @@ shared_ptr<BaseAST> ASTParser::parseIf() {
         else_value = parsed_else.second;
     }
 
-    return make_shared<IfAST>(cond, body, else_body, value, else_value);
+    auto res = make_shared<IfAST>(cond, body, else_body, value, else_value);
+
+    if (value != nullptr) {
+        assert(else_value != nullptr);
+
+        if (auto v = dynamic_cast<Expression *>(value.get())) {
+            res->expression_type = v->expression_type;
+
+            auto e = dynamic_cast<Expression *>(else_value.get()); // else must have a value here
+            assert(v->expression_type == e->expression_type && "If and else have different types!");
+        } else {
+            throw runtime_error("Somehow not an expression");
+        }
+    }
+
+    return res;
+}
+
+shared_ptr<BaseAST> ASTParser::parseIdent() {
+    auto res = make_shared<IdentAST>(IdentStr);
+    try {
+        res->expression_type = curr_defined_variables.at(IdentStr).type;
+    } catch (out_of_range) {
+        throw runtime_error("Undefined variable " + IdentStr);
+    }
+
+    getNextTok();
+
+    return res;
+}
+
+shared_ptr<BaseAST> ASTParser::parseRefToVal() {
+    getNextTok();
+    auto res = make_shared<RefToValAST>(parseExpr());
+
+    if (auto e = dynamic_cast<Expression *>(res->value.get())) {
+        res->expression_type = TType::withRef(new TType(e->expression_type));
+    } else {
+        throw runtime_error("Somehow not an expression");
+    }
+
+    return res;
 }
 
 /** Parse expressions. */
@@ -554,8 +692,7 @@ shared_ptr<BaseAST> ASTParser::parseExpr() {
         case Token::Val:
             return parseVal();
         case Token::Ref:
-             getNextTok();
-             return make_shared<RefToValAST>(parseExpr());
+             return parseRefToVal();
         case Token::IntLit:
             return parseIntLiteral();
         case Token::FloatLit:
@@ -590,9 +727,7 @@ shared_ptr<BaseAST> ASTParser::parseExpr() {
                         return parseTypeFieldLoad(type);
                     }
                 } else {
-                    auto res = make_shared<IdentAST>(IdentStr);
-                    getNextTok();
-                    return res;
+                    return parseIdent();
                 }
             } else if (if_type(currTok, IdentStr) && currTok != Token::Ref) {
                 return parseType();
@@ -621,6 +756,22 @@ shared_ptr<BaseAST> ASTParser::parseTypeFieldLoad(string st_name /**< Instance n
     getNextTok();
 
     auto res = make_shared<TypeFieldLoadAST>(st_name, f_name);
+
+    try {
+        if (auto this_tp = curr_defined_variables.at(st_name); this_tp.type.isCustom()) {
+            TypeDefAST type_type = typedefs.at(get<string>(this_tp.type.inner));
+            auto field_type = find_if(type_type.fields.begin(), type_type.fields.end(), [&](pair<string, TType> f) { return f.first == f_name; });
+            if (field_type != type_type.fields.end())
+                res->expression_type = field_type->second;
+            else
+                throw runtime_error("No field " + f_name + " in " + get<string>(this_tp.type.inner));
+
+        } else {
+            throw runtime_error(this_tp.name + " is not a custom type");
+        }
+    } catch (out_of_range) {
+        throw runtime_error("Undefined variable: " + st_name);
+    }
 
     if (currTok == Token::Operator) {
         return parseOperator(res);
@@ -652,7 +803,17 @@ shared_ptr<BaseAST> ASTParser::parseType() {
 
     }
     getNextTok();
-    return make_shared<TypeAST>(name, fields);
+
+    auto res = make_shared<TypeAST>(name, fields);
+
+    try {
+        typedefs.at(name);
+        res->expression_type = name;
+    } catch (out_of_range) {
+        throw runtime_error("In-place creation of undefined type " + name);
+    }
+
+    return res;
 }
 
 /** Parse variable creation. */
@@ -695,7 +856,21 @@ shared_ptr<BaseAST> ASTParser::parseOperator(shared_ptr<BaseAST> lhs) {
     getNextTok(); // eat op
     auto rhs = parseExpr();
 
-    return make_shared<OperatorAST>(name, lhs, rhs);
+    auto res = make_shared<OperatorAST>(name, lhs, rhs);
+
+    if (auto l = dynamic_cast<Expression *>(lhs.get()), r = dynamic_cast<Expression *>(rhs.get()); l && r) {
+        string op_full = l->expression_type.to_string() + name + r->expression_type.to_string();
+
+        if (auto op = find_if(operators.begin(), operators.end(), [&](OperatorDefAST o) { return o.name == op_full; }); op != operators.end()) {
+            res->expression_type = op->ret_type;
+        }
+    } else {
+        lhs->dump();
+        rhs->dump();
+        throw runtime_error("Somehow not an expression");
+    }
+
+    return res;
 }
 
 /** Parse type's method call */
@@ -752,6 +927,20 @@ shared_ptr<BaseAST> ASTParser::parseFncCall() {
     getNextTok(); // eat }
 
     auto res = make_shared<FncCallAST>(name, args);
+
+    if (auto f = find_if(functions.begin(), functions.end(), [&](FncDefAST f) { return f.name == res->name; }); f != functions.end()) {
+        res->expression_type = f->ret_type;
+    } else if (auto f = find_if(generic_fncs.begin(),
+                                generic_fncs.end(), [&](pair<string, GenericFncInfo> f) { return f.first == res->name; }); f != generic_fncs.end()) {
+        res->expression_type = f->second.function.ret_type;
+    } else if (auto f = find_if(ext_functions.begin(), ext_functions.end(), [&](ExternFncAST f) { return f.name == res->name; }); f != ext_functions.end()){
+        res->expression_type = f->ret_type;
+    } else {
+        throw runtime_error("Undefined function " + res->name);
+    }
+
+    if (find_if(generic_fncs.begin(), generic_fncs.end(), [&](pair<string, GenericFncInfo> p) { return p.first == name; }) != generic_fncs.end() )
+        generic_uses.emplace(name, *res);
 
     if (currTok == Token::Operator) {
         return parseOperator(res);
