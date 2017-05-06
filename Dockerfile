@@ -30,8 +30,8 @@ RUN apt-get install -y llvm-4.0 llvm-4.0-dev lvm-4.0-runtime
 
 RUN apt-get install -y libc++1 libc++-dev libc++abi1 libc++abi-dev git # Install libc++
 
-ENV CC=gcc-6
-ENV CXX=g++-6
+ENV CC=gcc-7
+ENV CXX=g++-7
 
 COPY . /ff
 RUN cmake . -Dtest=ON
