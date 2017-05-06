@@ -5,6 +5,7 @@
 #include <vector>
 #include <deque>
 #include <iostream>
+#include <optional>
 
 using std::string;
 using std::unique_ptr;
