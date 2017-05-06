@@ -15,8 +15,8 @@ TokenInfo TokenStream::get() {
     return vec[index - 1];
 }
 
-TokenInfo TokenStream::peek() {
-    return vec[index];
+TokenInfo TokenStream::peek(int i) {
+    return vec[(index - 1) + i];
 }
 
 vector<string> TokenStream::getTypes() {

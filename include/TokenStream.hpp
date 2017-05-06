@@ -30,7 +30,7 @@ class TokenStream {
         char getChar();
         unsigned long length();
         TokenInfo get();
-        TokenInfo peek();
+        TokenInfo peek(int i = 1);
         vector<string> getTypes();
     private:
         long line = 1, symbol = 1;

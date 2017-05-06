@@ -2,6 +2,7 @@
 
 #include "mpark/variant.hpp"
 #include <string>
+#include <iostream>
 
 using mpark::variant;
 using mpark::holds_alternative;
@@ -11,6 +12,8 @@ using std::get;
 using std::shared_ptr;
 using std::make_shared;
 using std::to_string;
+using std::cout;
+using std::endl;
 
 enum class _TType {
     Int,
@@ -75,11 +78,41 @@ class TType {
             }
         }
 
+        void dump() {
+            if (isRef()) {
+                cout << "ref " + referenceTo->to_string() << endl;;
+            } else if (isDeref()) {
+                cout << "val " + dereferenceTo->to_string() << endl;
+            } else if (holds_alternative<GenericType>(inner)) {
+                cout << "Generic " + get<GenericType>(inner).name << endl;
+            } else if (holds_alternative<_TType>(inner)) {
+                switch (get<_TType>(inner)) {
+                    case _TType::Int:
+                        cout << "int" << endl;
+                        break;
+                    case _TType::Float:
+                        cout << "float" << endl;
+                        break;
+                    case _TType::Str:
+                        cout << "str" << endl;
+                        break;
+                    case _TType::Void:
+                        cout << "void" << endl;
+                        break;
+                    case  _TType::Bool:
+                        cout << "bool" << endl;
+                        break;
+                }
+            } else {
+                cout << get<string>(inner) << endl;
+            }
+        }
+
         string to_string() {
             if (isRef()) {
-                return "ref " + referenceTo->to_string();
+                return referenceTo->to_string();
             } else if (isDeref()) {
-                return "val " + dereferenceTo->to_string();
+                return dereferenceTo->to_string();
             } else if (holds_alternative<GenericType>(inner)) {
                 return get<GenericType>(inner).name;
             } else if (holds_alternative<_TType>(inner)) {

@@ -102,8 +102,8 @@ class ASTParser {
         gen_parse(RefToVal);
 
         gen_parse(TypeFieldStore, string)
-        gen_parse(TypeFieldLoad, string)
-        gen_parse(TypeFncCall, string)
+        gen_parse(TypeFieldLoad, shared_ptr<BaseAST>)
+        gen_parse(TypeFncCall, shared_ptr<BaseAST>)
 
         gen_parse(Ident);
         gen_parse(Type)

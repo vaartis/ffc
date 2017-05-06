@@ -91,6 +91,7 @@ class CodeGen {
 
         map<string, GenericFncInfo> generic_fncs;
         multimap<string, FncCallAST> generic_uses;
+        map<string, TType> curr_generics_types;
 
         vector<string> real_names;
 
@@ -255,6 +256,8 @@ Type *CodeGen::getLLVMType(TType t) {
                   } catch (out_of_range) {
                       throw runtime_error("Unknown type: " + arg);
                   }
+              } else if constexpr (is_same_v<GenericType, T>) {
+                  return getLLVMType(curr_generics_types.at(static_cast<TType>(arg).to_string()));
               } else {
                   throw runtime_error("Bug");
               }
@@ -337,8 +340,8 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
         vector<Value *> argms;
         optional<Type *> tp;
 
-        if (ca->type.length() != 0) {
-            tp = functions.at(curr_fn_name).variables.at(ca->type)->getType();
+        if (ca->type.has_value()) {
+            tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType();
         }
 
         deque<Type *> mangle_args;
@@ -390,9 +393,16 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
         }
     } else if (auto st = dynamic_cast<TypeAST *>(obj.get())) {
         try {
-            LLVMStruct s = struct_types.at(st->name);
+            auto e = static_cast<Expression>(*st);
 
-            Value *tmp_struct = builder->CreateAlloca(s.type); // should be opimized out
+            LLVMStruct s;
+            if (e.expression_type.isGeneric()) {
+                s = struct_types.at(curr_generics_types.at(e.expression_type.to_string()));
+            } else {
+                s = struct_types.at(e.expression_type.to_string());
+            }
+
+            Value *tmp_struct = builder->CreateAlloca(s.type); // should be opimized out if unused
 
             for (auto field : st->fields) {
                 string f_name = field.first;
@@ -454,34 +464,31 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
 
         return builder->CreateStore(genExpr(st->value), this_field);
     } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
-        try {
-            auto val = functions.at(curr_fn_name).variables.at(st->struct_name);
+        auto val = genExpr(st->from);
+        auto tmpv = builder->CreateAlloca(val->getType());
+        builder->CreateStore(val, tmpv);
 
-            Type *tmpt = val->getType();
-            while (tmpt->isPointerTy())
-                tmpt = tmpt->getContainedType(0);
-            string type_name = tmpt->getStructName();
+        Type *tmpt = val->getType();
+        while (tmpt->isPointerTy())
+            tmpt = tmpt->getContainedType(0);
+        string type_name = tmpt->getStructName();
 
-            LLVMStruct s = struct_types.at(type_name);
+        LLVMStruct s = struct_types.at(type_name);
 
-            auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
-                                                                         if (v.first == st->field_name)
-                                                                             return true;
-                                                                         else
-                                                                             return false;
-                                                                     });
+        auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
+                                                                     if (v.first == st->field_name)
+                                                                         return true;
+                                                                     else
+                                                                         return false;
+                                                                 });
 
-                if (index_i == s.fields.end())
-                    throw runtime_error("Unknown field: " + st->field_name);
+        if (index_i == s.fields.end())
+            throw runtime_error("Unknown field: " + st->field_name);
 
-                unsigned int index = distance(s.fields.begin(), index_i);
+        unsigned int index = distance(s.fields.begin(), index_i);
 
-                Value *this_field = builder->CreateStructGEP(s.type, val, index);
-                return builder->CreateLoad(this_field);
-
-        } catch(out_of_range) {
-            throw runtime_error(string("Undefined varible: ") + st->struct_name);
-        }
+        Value *this_field = builder->CreateStructGEP(s.type, tmpv, index);
+        return builder->CreateLoad(this_field);
     } else if (auto o = dynamic_cast<IntAST *>(obj.get())) {
         return ConstantInt::get(getLLVMType(_TType::Int), o->value);
     } else if (auto f = dynamic_cast<FloatAST *>(obj.get())) {
@@ -772,6 +779,20 @@ void CodeGen::AST2IR() {
         functions.emplace(ex.name, LLVMFn(ext, map<string, Value *>(), getLLVMType(ex.ret_type)));
     }
 
+    for (auto st : this->typedefs) {
+        auto strct = st.second;
+
+        vector<pair<string, Type *>> els;
+        transform(strct.fields.begin(), strct.fields.end(), back_inserter(els),
+                  [&](pair<string, TType> t) -> pair<string, Type *> { return {t.first, getLLVMType(t.second)}; });
+        vector<Type *> decl_els;
+        transform(els.begin(), els.end(), back_inserter(decl_els),
+                  [&](pair<string, Type *> t) { return t.second; });
+
+        StructType *type = StructType::create(decl_els, st.first);
+
+        struct_types.emplace(st.first, LLVMStruct(els, type));
+    }
 
     for (auto u : this->generic_uses) {
         auto fn = generic_fncs.at(u.first);
@@ -779,8 +800,6 @@ void CodeGen::AST2IR() {
 
         deque<pair<string, TType>>::iterator ar;
         deque<shared_ptr<BaseAST>>::iterator ar_u;
-
-        map<string, TType> generics_usage;
 
         if (fn.function.args.size() != use.args.size())
             throw runtime_error("Invalid number of arguments for " + fn.function.name +
@@ -793,13 +812,14 @@ void CodeGen::AST2IR() {
 
             auto uu = dynamic_cast<Expression *>(arg->get());
             if (arg_g->second.isGeneric()) {
-                if (find_if(generics_usage.begin(),
-                            generics_usage.end(), [arg_g](pair<string, TType> gen) { return gen.first == arg_g->second.to_string(); }) == generics_usage.end()) {
+                if (find_if(curr_generics_types.begin(),
+                            curr_generics_types.end(),
+                            [arg_g](pair<string, TType> gen) { return gen.first == arg_g->second.to_string(); }) == curr_generics_types.end()) {
                     auto uu = dynamic_cast<Expression *>(arg->get());
-                    generics_usage.emplace(arg_g->second.to_string(), uu->expression_type);
+                    curr_generics_types.emplace(arg_g->second.to_string(), uu->expression_type);
                     arg_g->second = uu->expression_type;
                 } else {
-                    auto targ = generics_usage.at(arg_g->second.to_string());
+                    auto targ = curr_generics_types.at(arg_g->second.to_string());
 
                     if (targ != uu->expression_type) {
                         throw runtime_error("Generic type " +
@@ -815,34 +835,21 @@ void CodeGen::AST2IR() {
         }
 
         if (fn.function.ret_type.isGeneric()) {
-             if (find_if(generics_usage.begin(),
-                         generics_usage.end(), [&](pair<string, TType> gen) { return gen.first == fn.function.ret_type.to_string(); }) != generics_usage.end()) {
-                 fn.function.ret_type = generics_usage.at(fn.function.ret_type.to_string());
+             if (find_if(curr_generics_types.begin(),
+                         curr_generics_types.end(),
+                         [&](pair<string, TType> gen) { return gen.first == fn.function.ret_type.to_string(); }) != curr_generics_types.end()) {
+                 fn.function.ret_type = curr_generics_types.at(fn.function.ret_type.to_string());
              } else {
                  throw runtime_error("Unimplemented? Can't deduce return type of " + fn.function.name);
              }
         }
 
         genFnc(fn.function, nullopt, true);
+        curr_generics_types.clear();
     }
 
     for (auto op : this->ops) {
         genFnc(op);
-    }
-
-    for (auto st : this->typedefs) {
-        auto strct = st.second;
-
-        vector<pair<string, Type *>> els;
-        transform(strct.fields.begin(), strct.fields.end(), back_inserter(els),
-                  [&](pair<string, TType> t) -> pair<string, Type *> { return {t.first, getLLVMType(t.second)}; });
-        vector<Type *> decl_els;
-        transform(els.begin(), els.end(), back_inserter(decl_els),
-                  [&](pair<string, Type *> t) { return t.second; });
-
-        StructType *type = StructType::create(decl_els, st.first);
-
-        struct_types.emplace(st.first, LLVMStruct(els, type));
     }
 
     for (auto i : this->impls) {

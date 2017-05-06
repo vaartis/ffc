@@ -15,6 +15,8 @@ using std::pair;
 using std::ostream;
 using std::cout;
 using std::endl;
+using std::optional;
+using std::nullopt;
 
 static unsigned int OFFSET = 0;
 static bool WAS_O = false;
@@ -163,14 +165,14 @@ class TypeFieldStoreAST : public BaseAST {
 /** AST node that represents loading a value from type's field. */
 class TypeFieldLoadAST : public BaseAST, public Expression {
     public:
-        TypeFieldLoadAST(string st_n, /**< Instance name */
+        TypeFieldLoadAST(shared_ptr<BaseAST> fr, /**< Instance name */
                          string f_n /**< Field name */
-                         ) : struct_name(st_n), field_name(f_n) {}
-        string struct_name;
+            ) : from(fr), field_name(f_n) {}
+        shared_ptr<BaseAST> from;
         string field_name;
 
         void dump() {
-            Print::print("TypeFieldLoad (", struct_name, ".", field_name, ")");
+            Print::print("TypeFieldLoad (", expression_type.to_string(), ".", field_name, ")");
         }
 };
 
@@ -409,12 +411,12 @@ class FncCallAST : public BaseAST, public Expression {
     public:
         FncCallAST(string nm, /**< Function name */
                    deque<shared_ptr<BaseAST>> ar, /**< Function arguments */
-                   string t = "" /**< Type, to which this function belongs or an empty string*/
+                   optional<string> t = nullopt /**< Type, to which this function belongs or an empty string*/
                    ) : name(nm), args(ar), type(t) {}
 
         string name;
         deque<shared_ptr<BaseAST>> args;
-        string type;
+        optional<string> type;
 
         bool operator ==(FncCallAST &other) {
             return (name == other.name) && (args == other.args) && (type == other.type);
