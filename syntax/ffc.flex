@@ -6,70 +6,44 @@
 %{
 
 #include <string>
+#include <iostream>
 
-std::string string_buf;
-std::string operator_buf;
+using namespace std;
+
+string string_buf;
+string operator_buf;
 
 int curr_lineno = 1;
 extern int verbose_flag;
 extern "C" int yylex();
 
-typedef struct {
-    std::string ident;
-    std::string str;
-    int int_num;
-    float float_num;
-    bool bool_val;
-    std::string op;
-    std::string error_msg;
-} YYSTYPE;
-
+#include "tokens.hpp"
 YYSTYPE yylval;
 
-enum TokType {
-    Fnc,
-    Extern,
-    Operator,
-    Include,
-    Type,
-    Ref,
-    Val,
-    Implement,
-    For,
-    Destructor,
-    If,
-    While,
-    Else,
-    Ret,
-    Generic,
-    Error,
-    Bool,
-    Int,
-    Str,
-    Float,
-    Ident,
-    Eq
-};
-
-using namespace std;
-#include <iostream>
 extern "C" int optind;
 
 void handle_flags(int argc, char *argv[]);
+
+FILE *fin;
+
+#undef YY_INPUT
+#define YY_INPUT(buf,result,max_size) \
+    if ((result = fread((char *)buf, 1, max_size, fin)) < 0) { \
+        YY_FATAL_ERROR("read() failed in lexer"); \
+    }
+
+extern void dump_token(int lineno, int token, YYSTYPE yylval);
 
 int main(int argc, char** argv) {
     int token;
 
     while (optind < argc) {
-        FILE *fin = fopen(argv[optind], "r");
+        fin = fopen(argv[optind], "r");
         if (fin == NULL) {
             cerr << "Could not open input file " << argv[optind] << endl;
             exit(1);
         }
 
-        // sm: the 'coolc' compiler's file-handling loop resets
-        // this counter, so let's make the stand-alone lexer
-        // do the same thing
         curr_lineno = 1;
 
         //
@@ -77,14 +51,7 @@ int main(int argc, char** argv) {
         //
         cout << "#name \"" << argv[optind] << "\"" << endl;
         while ((token = yylex()) != 0) {
-            cout << curr_lineno << " " << token << " "
-                 << yylval.ident
-                 << yylval.str
-                 << yylval.int_num
-                 << yylval.float_num
-                 << yylval.bool_val
-                 << yylval.op
-                 << yylval.error_msg;
+            dump_token(curr_lineno, token, yylval);
         }
         fclose(fin);
         optind++;
@@ -123,6 +90,12 @@ generic    return Generic;
 }
 
 = return Eq;
+"(" return '(';
+")" return ')';
+";" return ';';
+"," return ',';
+"{" return '{';
+"}" return '}';
 
 <INITIAL>\" {
     BEGIN(IN_STRING);
@@ -158,12 +131,12 @@ false {
 }
 
 {FLOAT} {
-    yylval.float_num = std::stof(yytext);
+    yylval.float_num = stof(yytext);
     return Float;
 }
 
 {INT} {
-    yylval.int_num = std::stoi(yytext);
+    yylval.int_num = stoi(yytext);
     return Int;
 }
 
