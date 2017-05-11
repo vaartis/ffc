@@ -1,3 +1,4 @@
+/* -*- Mode: bison -*-
 /*
  *  The scanner definition for FFC.
  */
