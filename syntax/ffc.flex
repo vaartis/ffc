@@ -70,7 +70,7 @@ OP [!~@#$%&^*-+\\/<>][!~@#$%&^*-+\\/<>=]*
 
 fnc        return Fnc;
 extern     return Extern;
-operator   return Operator;
+operator   return OperatorKw;
 include    return Include;
 type       return Type;
 ref        return Ref;

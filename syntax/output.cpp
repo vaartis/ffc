@@ -9,6 +9,7 @@ static const char *token_to_string(int tok) {
     case Fnc: return "FNC";
     case Extern: return "EXTERN";
     case Operator: return "op";
+    case OperatorKw: return "OPERATOR";
     case Include: return "INCLUDE";
     case Type: return "TYPE";
     case Ref: return "REF";

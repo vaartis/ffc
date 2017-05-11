@@ -6,6 +6,7 @@ enum TokType {
     Fnc = 258,
     Extern,
     Operator,
+    OperatorKw,
     Include,
     Type,
     Ref,
