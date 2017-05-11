@@ -1,3 +1,4 @@
 !Makefile
+!test.ff
 ffc.yy.c
 lexer
