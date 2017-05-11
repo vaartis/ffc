@@ -3,7 +3,7 @@
 #include <string>
 
 enum TokType {
-    Fnc = 1,
+    Fnc = 258,
     Extern,
     Operator,
     Include,
