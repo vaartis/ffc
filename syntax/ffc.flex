@@ -50,6 +50,47 @@ enum TokType {
     Eq
 };
 
+using namespace std;
+#include <iostream>
+extern "C" int optind;
+
+void handle_flags(int argc, char *argv[]);
+
+int main(int argc, char** argv) {
+    int token;
+
+    while (optind < argc) {
+        FILE *fin = fopen(argv[optind], "r");
+        if (fin == NULL) {
+            cerr << "Could not open input file " << argv[optind] << endl;
+            exit(1);
+        }
+
+        // sm: the 'coolc' compiler's file-handling loop resets
+        // this counter, so let's make the stand-alone lexer
+        // do the same thing
+        curr_lineno = 1;
+
+        //
+        // Scan and print all tokens.
+        //
+        cout << "#name \"" << argv[optind] << "\"" << endl;
+        while ((token = yylex()) != 0) {
+            cout << curr_lineno << " " << token << " "
+                 << yylval.ident
+                 << yylval.str
+                 << yylval.int_num
+                 << yylval.float_num
+                 << yylval.bool_val
+                 << yylval.op
+                 << yylval.error_msg;
+        }
+        fclose(fin);
+        optind++;
+    }
+    exit(0);
+}
+
 %}
 %x IN_STRING
 
