@@ -4,6 +4,7 @@ project(FF C CXX)
 include(ExternalProject)
 
 option(test "Build tests" OFF)
+option(coverage "Code coverage" OFF)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.0.0")
@@ -42,6 +43,12 @@ add_definitions(
   ${LLVM_DEFINITIONS}
   )
 
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeModules)
+
+if(coverage)
+  set(test ON)
+endif()
+
 if(test)
   find_package(GTest REQUIRED)
 
@@ -52,6 +59,17 @@ if(test)
 
   include_directories(${GTEST_INCLUDE_DIRS})
   target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES} pthread)
+
+  if(coverage)
+    add_definitions(-g -O0 -fprofile-arcs -ftest-coverage)
+    include(CodeCoverage)
+
+    set(LCOV_REMOVE_EXTRA "'deps/*'")
+    setup_target_for_coverage(cov run_tests coverage)
+
+    add_dependencies(cov run_tests)
+    target_link_libraries(run_tests --coverage)
+  endif()
 else()
   file(GLOB ff_SRC "src/*.cpp")
 
