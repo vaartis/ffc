@@ -207,6 +207,9 @@ ImplementAST ASTParser::parseImplement() {
     while (currTok != Token::ClCB) {
         FncDefAST curr_fnc;
 
+        curr_fnc.args.push_front({"self", type});
+        curr_defined_variables.emplace("self", TypedName("self", type));
+
         if (currTok == Token::Fnc) {
             curr_fnc = parseFncDef();
         } else if (currTok == Token::Destructor) {
@@ -219,7 +222,6 @@ ImplementAST ASTParser::parseImplement() {
             throw runtime_error("Unknown token in IMPLEMENT");
         }
 
-        curr_fnc.args.push_front({"self", type});
         fncs.push_back(move(curr_fnc));
     }
 
