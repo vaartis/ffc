@@ -1,5 +1,5 @@
 # ffc
-[![Build Status](https://travis-ci.org/TyanNN/ffc.svg?branch=master)](https://travis-ci.org/TyanNN/ffc)
-[![Coverage Status](https://coveralls.io/repos/github/TyanNN/ffc/badge.svg?branch=HEAD)](https://coveralls.io/github/TyanNN/ffc?branch=HEAD)
+[![Travis](https://img.shields.io/travis/TyanNN/ffc.svg)](https://travis-ci.org/TyanNN/ffc/)
+[![Coveralls](https://img.shields.io/coveralls/TyanNN/ffc/HEAD.svg)](https://coveralls.io/github/TyanNN/ffc)
 
 F.F. lang compiler
