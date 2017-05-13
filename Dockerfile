@@ -12,13 +12,16 @@ RUN add-apt-repository "deb http://apt.llvm.org/zesty/ llvm-toolchain-zesty-4.0 
 RUN apt-get update
 RUN apt-get install -y cmake make gcc-7 g++ libgtest-dev\
                        google-mock build-essential pkg-config libc++1 libc++-dev libc++abi1 libc++abi-dev git\
-                       llvm-4.0 llvm-4.0-dev lvm-4.0-runtime rubygems lcov
+                       llvm-4.0 llvm-4.0-dev lvm-4.0-runtime rubygems lcov libedit-dev\
+                       zlib1g-dev
 
 RUN gem install coveralls-lcov
 WORKDIR /usr/src/gtest
 RUN cmake .
 RUN cmake --build .
 RUN mv libg* /usr/lib/
+
+RUN apt-get install -y libedit-dev zlib1g-dev
 
 WORKDIR /ff
 COPY . /ff

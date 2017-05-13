@@ -1,3 +1,5 @@
+#pragma once
+
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
@@ -46,13 +48,21 @@ static string getFileContent(const string pth) {
 
 class CodeGen {
     public:
-        CodeGen(string fnm) {
-            fname = fnm.substr(0, fnm.length() - 3);
+        CodeGen(string s, bool is_from_string = false) {
+            if (!is_from_string) {
+                fname = s.substr(0, s.length() - 3);
+            }
 
             module = std::make_unique<Module>(fname, context); // .ff
             builder = make_shared<IRBuilder<>>(context);
 
-            ASTParser parser(getFileContent(fname + ".ff"));
+            string parser_text;
+            if (!is_from_string) {
+                parser_text = getFileContent(fname + ".ff");
+            } else {
+                parser_text = s;
+            }
+            ASTParser parser(parser_text);
 
             ast = parser.functions;
             exts = parser.ext_functions;
@@ -68,7 +78,7 @@ class CodeGen {
 
         unique_ptr<Module> module;
         vector<unique_ptr<Module>> includes;
-    private:
+    protected:
         string fname;
 
         vector<FncDefAST> ast;

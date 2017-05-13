@@ -21,6 +21,7 @@ endif()
 
 find_package(LLVM 4 REQUIRED)
 message(STATUS "Found LLVM: ${LLVM_INSTALL_PREFIX}")
+llvm_map_components_to_libnames(llvm_libs all)
 
 ExternalProject_Add(Variant
   GIT_REPOSITORY "https://github.com/mpark/variant"
@@ -40,7 +41,6 @@ include_directories(
 
 add_definitions(
   -std=c++1z -g
-  ${LLVM_DEFINITIONS}
   )
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeModules)
@@ -49,17 +49,19 @@ if(coverage)
   set(test ON)
 endif()
 
+llvm_map_components_to_libnames(llvm_libs all)
+
 if(test)
   find_package(GTest REQUIRED)
 
   file(GLOB tests_SRC "test/*/*.cpp")
-  list(APPEND tests_SRC "src/ASTParser.cpp" "src/TokenStream.cpp")
+  list(APPEND tests_SRC "src/ASTParser.cpp" "src/TokenStream.cpp" "src/CodeGen.cpp")
 
   add_executable(run_tests ${tests_SRC})
   add_dependencies(run_tests ${DEPS})
 
   include_directories(${GTEST_INCLUDE_DIRS})
-  target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES} pthread)
+  target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES} ${llvm_libs} pthread)
 
   if(coverage)
     add_definitions(--coverage)
@@ -71,7 +73,5 @@ else()
   add_executable(ffc ${ff_SRC})
   add_dependencies(ffc ${DEPS})
 
-  llvm_map_components_to_libnames(llvm_libs all)
-
-  target_link_libraries (ffc ${llvm_libs})
+  target_link_libraries(ffc ${llvm_libs})
 endif()
