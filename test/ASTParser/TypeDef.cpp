@@ -47,3 +47,7 @@ TEST(TypeDef, WithRef) {
     ASSERT_TRUE(type.fields[1].second.isRef());
     ASSERT_EQ(type.fields[1].first, "y");
 }
+
+TEST(TypeDef, SemicolonNotComma) {
+    ASSERT_THROW(ASTParser par("type T { ref int x; }"), std::runtime_error);
+}
