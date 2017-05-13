@@ -1,0 +1,5 @@
+!Makefile
+!test.ff
+*.o
+ffc.yy.cpp
+lexer
