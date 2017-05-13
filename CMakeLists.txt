@@ -53,21 +53,16 @@ if(test)
   find_package(GTest REQUIRED)
 
   file(GLOB tests_SRC "test/*/*.cpp")
+  list(APPEND tests_SRC "src/ASTParser.cpp" "src/TokenStream.cpp")
 
-  add_executable(run_tests ${tests_SRC} "src/ASTParser.cpp" "src/TokenStream.cpp")
+  add_executable(run_tests ${tests_SRC})
   add_dependencies(run_tests ${DEPS})
 
   include_directories(${GTEST_INCLUDE_DIRS})
   target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES} pthread)
 
   if(coverage)
-    add_definitions(-g -O0 -fprofile-arcs -ftest-coverage)
-    include(CodeCoverage)
-
-    set(LCOV_REMOVE_EXTRA "'deps/*'")
-    setup_target_for_coverage(cov run_tests coverage)
-
-    add_dependencies(cov run_tests)
+    add_definitions(--coverage)
     target_link_libraries(run_tests --coverage)
   endif()
 else()
