@@ -4,7 +4,6 @@ project(FF C CXX)
 include(ExternalProject)
 
 option(test "Build tests" OFF)
-option(coverage "Code coverage" OFF)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.0.0")
@@ -19,8 +18,10 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_definitions(-Wimplicit-fallthrough)
 endif()
 
-find_package(LLVM 4 REQUIRED)
-message(STATUS "Found LLVM: ${LLVM_INSTALL_PREFIX}")
+find_program(LLVM_CONFIG llvm-config)
+execute_process(COMMAND ${LLVM_CONFIG} --includedir OUTPUT_VARIABLE LLVM_INCLUDE OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG} --libs OUTPUT_VARIABLE LLVM_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+execute_process(COMMAND ${LLVM_CONFIG} --libdir OUTPUT_VARIABLE LLVM_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 ExternalProject_Add(Variant
   GIT_REPOSITORY "https://github.com/mpark/variant"
@@ -35,43 +36,41 @@ set(DEPS Variant) # External dependencies
 include_directories(
   "include"
   "deps/variant/include"
-  ${LLVM_INCLUDE_DIRS}
+  "${LLVM_INCLUDE}"
+  )
+link_directories(
+  "${LLVM_LIBIR}"
   )
 
 add_definitions(
+  "${LLVM_CXX}"
   -std=c++1z -g
-  ${LLVM_DEFINITIONS}
   )
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeModules)
 
-if(coverage)
-  set(test ON)
-endif()
-
 if(test)
-  find_package(GTest REQUIRED)
+  message(STATUS "Tests are enabled")
+  find_program(GTEST_CONFIG gtest-config)
+  execute_process(COMMAND ${GTEST_CONFIG} --includedir OUTPUT_VARIABLE GTEST_INCLUDE OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(COMMAND ${GTEST_CONFIG} --libs OUTPUT_VARIABLE GTEST_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+  execute_process(COMMAND ${GTEST_CONFIG} --libdir OUTPUT_VARIABLE GTEST_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+  include_directories("${GTEST_INCLUDE}")
+  link_directories("${GTEST_LIBDIR}")
 
   file(GLOB tests_SRC "test/*/*.cpp")
-  list(APPEND tests_SRC "src/ASTParser.cpp" "src/TokenStream.cpp")
+  list(APPEND tests_SRC "src/ASTParser.cpp" "src/TokenStream.cpp" "src/CodeGen.cpp")
 
   add_executable(run_tests ${tests_SRC})
   add_dependencies(run_tests ${DEPS})
 
   include_directories(${GTEST_INCLUDE_DIRS})
-  target_link_libraries(run_tests ${GTEST_BOTH_LIBRARIES} pthread)
-
-  if(coverage)
-    add_definitions(--coverage)
-    target_link_libraries(run_tests --coverage)
-  endif()
+  target_link_libraries(run_tests "${GTEST_LIBS}" gtest_main "${LLVM_LIBS}" pthread)
 else()
   file(GLOB ff_SRC "src/*.cpp")
 
   add_executable(ffc ${ff_SRC})
   add_dependencies(ffc ${DEPS})
-
-  llvm_map_components_to_libnames(llvm_libs all)
-
-  target_link_libraries (ffc ${llvm_libs})
+  target_link_libraries(ffc ${LLVM_LIBS})
 endif()
