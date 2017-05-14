@@ -41,3 +41,8 @@ TEST_F(MangleTests, Operator) {
     string r = mangle(&f, nullopt);
     ASSERT_EQ(r, "_FFON9i32+floatA3i325float");
 }
+
+TEST_F(MangleTests, LLVMFnc) {
+    string r = mangle(LLVMCall("test", deque<Type *>{getLLVMType(_TType::Int)}, 'F'), nullopt);
+    ASSERT_EQ(r, "_FFFN4testA3i32");
+}
