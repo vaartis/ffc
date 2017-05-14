@@ -4,13 +4,8 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/IRBuilder.h"
 
-#include "llvm/IR/PassManager.h"
-#include "llvm/Transforms/IPO/AlwaysInliner.h"
-
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
-
-#include "llvm/Linker/Linker.h"
 
 #include <fstream>
 #include <vector>
@@ -31,8 +26,8 @@ using std::ifstream;
 using std::istreambuf_iterator;
 using std::runtime_error;
 
-static LLVMContext context;
-static bool compiledInEmited = false;
+extern LLVMContext context;
+extern bool compiledInEmited;
 
 static string getFileContent(const string pth) {
   ifstream file(pth);

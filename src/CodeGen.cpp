@@ -4,6 +4,9 @@ using namespace std;
 using namespace llvm;
 using mpark::variant;
 
+bool compiledInEmited = false;
+LLVMContext context;
+
 string CodeGen::mangle(LLVMCall f, optional<Type *> t = nullopt) {
     string res_name("_FF" + string(1, f.type));
 

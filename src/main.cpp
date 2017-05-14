@@ -1,6 +1,11 @@
 #include <iostream>
 #include <fstream>
 
+#include "llvm/Linker/Linker.h"
+
+#include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/IPO/AlwaysInliner.h"
+
 #include "CodeGen.hpp"
 
 using namespace std;
