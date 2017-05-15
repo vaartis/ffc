@@ -7,7 +7,51 @@ using mpark::variant;
 bool compiledInEmited = false;
 LLVMContext context;
 
-string CodeGen::mangle(LLVMCall f, optional<Type *> t = nullopt) {
+string CodeGen::mangle(FncDefAST *f, optional<string> tp = nullopt) {
+   string res_name = "_FF";
+
+    if (dynamic_cast<OperatorDefAST *>(f)) {
+        res_name += "O";
+    } else {
+        res_name += "F";
+    }
+
+    if (tp.has_value()) {
+        res_name += "T" + to_string(tp.value().length()) + tp.value();
+    }
+
+    res_name += "N" + to_string(f->name.length()) + f->name;
+
+    for (auto &arg : f->args) {
+            res_name += "A";
+            string arg_name;
+            if (getLLVMType(arg.second)->isStructTy()) {
+                arg_name = getLLVMType(arg.second)->getStructName();
+            } else {
+                string useless;
+                raw_string_ostream name_s(useless);
+                Type *tt = getLLVMType(arg.second);
+
+                tt->print(name_s);
+
+                arg_name = name_s.str();
+            }
+
+            res_name += to_string(arg_name.length()) + arg_name;
+    }
+
+    Type *rtype = getLLVMType(f->ret_type);
+    string useless;
+    raw_string_ostream name_s(useless);
+    rtype->print(name_s);
+    string rs = name_s.str();
+
+    res_name += "R" + to_string(rs.length()) + rs;
+
+    return res_name;
+}
+
+string CodeGen::mangle(LLVMFn f, optional<Type *> t = nullopt) {
     string res_name("_FF" + string(1, f.type));
 
     if (t.has_value()) {
@@ -19,27 +63,28 @@ string CodeGen::mangle(LLVMCall f, optional<Type *> t = nullopt) {
         res_name += "T" + to_string(st_name.length()) + st_name;
     }
 
-    res_name += "N" + to_string(f.name.length()) + f.name;
+    res_name += "N" + to_string(f.fn->getName().str().length()) + f.fn->getName().str();
 
-    if (f.args.size() > 0) {
+    for (auto &arg : f.fn->getArgumentList()) {
         res_name += "A";
-        for (auto a : f.args) {
-            string arg_name;
-            if (a->isStructTy()) {
-                arg_name = a->getStructName();
-            } else {
+        string arg_name;
+        if (arg.getType()->isStructTy()) {
+            arg_name = arg.getType()->getStructName();
+        } else {
+            string useless;
+            raw_string_ostream name_s(useless);
 
-                string useless;
-                raw_string_ostream name_s(useless);
+            arg.getType()->print(name_s);
 
-                a->print(name_s);
-
-                arg_name = name_s.str();
-            }
-
-            res_name += to_string(arg_name.length()) + arg_name;
+            arg_name = name_s.str();
         }
+        res_name += to_string(arg_name.length()) + arg_name;
     }
+
+    string useless;
+    raw_string_ostream name_s(useless);
+    f.fn->getReturnType()->print(name_s);
+    res_name += "R" + to_string(name_s.str().length()) + name_s.str();
 
     return res_name;
 }
@@ -48,25 +93,27 @@ string CodeGen::mangle(LLVMCall f, optional<Type *> t = nullopt) {
 // N name
 // A args
 // T if function is a member of type
-string CodeGen::mangle(Call *f, optional<string> tp = nullopt) {
-    string res_name("_FF" + string(1, f->getType()));
+// R is function return type
+string CodeGen::mangle(FncCallAST *f, optional<string> tp = nullopt) {
+    string res_name = "_FF" + string(1, f->f_or_op);
 
     if (tp.has_value()) {
         res_name += "T" + to_string(tp.value().length()) + tp.value();
     }
 
-    res_name += "N" + to_string(f->getName().length()) + f->getName();
+    res_name += "N" + to_string(f->name.length()) + f->name;
 
-    if (f->getArgs().size() > 0) {
-        res_name += "A";
-        for (auto a : f->getArgs()) {
+    for (auto &arg : f->args) {
             string arg_name;
-            if (getLLVMType(a.second)->isStructTy()) {
-                arg_name = getLLVMType(a.second)->getStructName();
+
+            auto at = dynamic_cast<Expression *>(arg.get())->expression_type;
+
+            if (getLLVMType(at)->isStructTy()) {
+                arg_name = getLLVMType(at)->getStructName();
             } else {
                 string useless;
                 raw_string_ostream name_s(useless);
-                Type *tt = getLLVMType(a.second);
+                Type *tt = getLLVMType(at);
 
                 tt->print(name_s);
 
@@ -74,8 +121,16 @@ string CodeGen::mangle(Call *f, optional<string> tp = nullopt) {
             }
 
             res_name += to_string(arg_name.length()) + arg_name;
-        }
     }
+
+
+    Type *rtype = getLLVMType(dynamic_cast<Expression *>(f)->expression_type);
+    string useless;
+    raw_string_ostream name_s(useless);
+    rtype->print(name_s);
+    string rs = name_s.str();
+
+    res_name += "R" + to_string(rs.length()) + rs;
 
     return res_name;
 }
@@ -89,7 +144,6 @@ Type *CodeGen::getLLVMType(TType t) {
         }
         return res;
     }
-
 
     return visit([&](auto arg) -> Type * {
               using T = decltype(arg);
@@ -113,7 +167,7 @@ Type *CodeGen::getLLVMType(TType t) {
                       throw runtime_error("Unknown type: " + arg);
                   }
               } else if constexpr (is_same_v<GenericType, T>) {
-                  return getLLVMType(curr_generics_types.at(static_cast<TType>(arg).to_string()));
+                  return getLLVMType(curr_generics_types.at(t.to_string()));
               } else {
                   throw runtime_error("Bug");
               }
@@ -194,10 +248,10 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
     } else if (auto ca = dynamic_cast<FncCallAST *>(obj.get())) {
         LLVMFn callee;
         vector<Value *> argms;
-        optional<Type *> tp;
+        optional<string> tp;
 
         if (ca->type.has_value()) {
-            tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType();
+            tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType()->getStructName();
         }
 
         deque<Type *> mangle_args;
@@ -211,7 +265,7 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
 
         string name = ca->name;
         if (find_if(exts.begin(), exts.end(), [&](ExternFncAST e){ return e.name == ca->name; }) == exts.end()) {
-            name = mangle(LLVMCall(ca->name, mangle_args, 'F'), tp);
+            name = mangle(ca);
         }
 
         try {
@@ -234,19 +288,6 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
         }
 
         return builder->CreateCall(callee.fn, argms);
-    } else if (auto op = dynamic_cast<OperatorAST *>(obj.get())) {
-        Value *lhs = genExpr(op->lhs);
-        Value *rhs = genExpr(op->rhs);
-
-        string name = mangle(LLVMCall(op->name, deque<Type *>{lhs->getType(), rhs->getType()}, 'O'));
-
-        try {
-            LLVMFn callee = functions.at(name);
-
-            return builder->CreateCall(callee.fn, {lhs, rhs});
-        } catch(out_of_range) {
-            throw runtime_error("Operator not defined: " + name);
-        }
     } else if (auto st = dynamic_cast<TypeAST *>(obj.get())) {
         try {
             auto e = static_cast<Expression>(*st);
@@ -446,11 +487,6 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
     throw runtime_error("strange expr");
 }
 
-void CodeGen::genFnc(OperatorDefAST fn, optional<string> type = nullopt, bool skipcheck = false) {
-    fn.name = fn.base_name;
-    genFnc(static_cast<FncDefAST>(fn), type, skipcheck);
-}
-
 /** Generate a function from an AST node.
  *
  * Inserts exiting and entering points, exiting value, mangles function's name & adds
@@ -498,7 +534,9 @@ void CodeGen::genFnc(FncDefAST fn, optional<string> type = nullopt, bool skipche
         fn_vars.emplace(fnc_arg->first, alloc);
     }
 
-    functions.emplace(fn.name, LLVMFn(fnc, fn_vars, getLLVMType(fn.ret_type)));
+    char f_or_op = dynamic_cast<OperatorDefAST *>(&fn) ? 'O' : 'F';
+
+    functions.emplace(fn.name, LLVMFn(fnc, fn_vars, getLLVMType(fn.ret_type), f_or_op));
     functions.at(curr_fn_name).exit_block = exit;
     functions.at(curr_fn_name).exit_value = exit_value;
 
@@ -530,7 +568,9 @@ void CodeGen::genFnc(FncDefAST fn, optional<string> type = nullopt, bool skipche
 
                 try {
                     Type *selftp = struct_types.at(st_name).type;
-                    string mname = mangle(LLVMCall("destructor", {selftp}, 'F'), selftp);
+                    FncDefAST fff("destructor", deque<pair<string, TType>>{{"self", st_name}},
+                                  _TType::Void, vector<shared_ptr<BaseAST>>{}, map<string, TypedName>{});
+                    string mname = mangle(&fff, st_name);
                     auto callee = functions.at(mname);
 
                     builder->CreateCall(callee.fn, builder->CreateLoad(val));
@@ -551,11 +591,21 @@ void CodeGen::genFnc(FncDefAST fn, optional<string> type = nullopt, bool skipche
 void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unused
     auto defOp = [&](tuple<string, TType, TType, TType, function<Value *(Value *, Value *)>> fncdef) {
         string op = get<0>(fncdef);
+        TType tt1 = get<1>(fncdef);
+        TType tt2 = get<2>(fncdef);
+        TType rret = get<3>(fncdef);
+
+        OperatorDefAST o(tt1.to_string() + op + tt2.to_string(),
+                         op,
+                         deque<pair<string, TType>>{{"x", tt1}, {"y", {tt2}}},
+                         rret,
+                         vector<shared_ptr<BaseAST>>{},
+                         map<string, TypedName>{});
+        string name = mangle(&o);
+
         Type *t1 = getLLVMType(get<1>(fncdef));
         Type *t2 = getLLVMType(get<2>(fncdef));
         Type *ret = getLLVMType(get<3>(fncdef));
-
-        string name = mangle(LLVMCall(op, deque<Type *>{t1,t2}, 'O'));
 
         Function *fnc = Function::Create(FunctionType::get(ret, vector<Type *>{t1,t2}, false), Function::LinkOnceAnyLinkage, name, module.get());
         fnc->addFnAttr(Attribute::AlwaysInline);
@@ -566,7 +616,7 @@ void CodeGen::genCompiledIn() { // Always inline compiled in & optimize out unus
         auto &arg_list = fnc->getArgumentList();
 
         builder->CreateRet(get<4>(fncdef)(&*arg_list.begin(), &*--arg_list.end()));
-        functions.emplace(name, LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType()));
+        functions.emplace(name, LLVMFn(fnc, map<string, Value *>(), fnc->getReturnType(), 'O'));
     };
 
     #define genTuple(c, t1, t2, ret, lmd) {c, _TType::t1, _TType::t2, _TType::ret, [&](Value *v1, Value *v2){ return builder->lmd(v1,v2);}}
@@ -614,7 +664,7 @@ void CodeGen::AST2IR() {
             CodeGen m(mod + ".ff");
             for (auto &o_fn : m.module->getFunctionList()) {
                 Function *ef = cast<Function>(module->getOrInsertFunction(o_fn.getName(), o_fn.getFunctionType()));
-                functions.emplace(o_fn.getName(), LLVMFn(ef, map<string, Value*>(), o_fn.getReturnType()));
+                functions.emplace(o_fn.getName(), LLVMFn(ef, map<string, Value*>(), o_fn.getReturnType(), 'F')); // FIXME
             }
             includes.push_back(move(m.module));
         }
@@ -632,7 +682,7 @@ void CodeGen::AST2IR() {
         FunctionType *extTy = FunctionType::get(getLLVMType(ex.ret_type), ext_args, false);
 
         Function *ext = cast<Function>(module->getOrInsertFunction(ex.name, extTy));
-        functions.emplace(ex.name, LLVMFn(ext, map<string, Value *>(), getLLVMType(ex.ret_type)));
+        functions.emplace(ex.name, LLVMFn(ext, map<string, Value *>(), getLLVMType(ex.ret_type), 'F'));
     }
 
     for (auto st : this->typedefs) {

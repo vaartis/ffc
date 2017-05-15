@@ -886,7 +886,7 @@ shared_ptr<BaseAST> ASTParser::parseTypeFncCall(shared_ptr<BaseAST> st) {
 
     string tp_name = expr->expression_type.to_string();
 
-    auto res = make_shared<FncCallAST>(f_name, args, tp_name);
+    auto res = make_shared<FncCallAST>(f_name, args, 'F', tp_name);
     res->args.push_front(make_shared<IdentAST>(tp_name));
 
 
@@ -929,7 +929,7 @@ shared_ptr<BaseAST> ASTParser::parseFncCall() {
 
     getNextTok(); // eat }
 
-    auto res = make_shared<FncCallAST>(name, args);
+    auto res = make_shared<FncCallAST>(name, args, 'F');
 
     if (auto f = find_if(functions.begin(), functions.end(), [&](FncDefAST f) { return f.name == res->name; }); f != functions.end()) {
         res->expression_type = f->ret_type;

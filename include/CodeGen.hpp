@@ -92,21 +92,14 @@ class CodeGen {
 
         Type *getLLVMType(TType t); // built-in
 
-        struct LLVMCall {
-            public:
-                LLVMCall(string n, deque<Type *> ar, char c) : name(n), args(ar), type(c) {}
-                string name;
-                deque<Type *> args;
-                char type;
-        };
-
         struct LLVMFn {
             public:
-                LLVMFn(Function *f, map<string, Value *> vars, Type *tp) : fn(f), variables(vars), ret_type(tp) {}
+                LLVMFn(Function *f, map<string, Value *> vars, Type *tp, char t) : fn(f), variables(vars), ret_type(tp), type(t) {}
                 LLVMFn() {}
                 Function *fn;
                 map<string, Value *> variables;
                 Type *ret_type;
+                char type;
 
                 BasicBlock *exit_block;
                 Value *exit_value;
@@ -128,12 +121,11 @@ class CodeGen {
 
         string curr_fn_name;
 
-        string mangle(LLVMCall f, optional<Type *> tp);
-        string mangle(Call *f, optional<string> tp);
-
+        string mangle(LLVMFn f, optional<Type *> tp);
+        string mangle(FncCallAST *f, optional<string> tp);
+        string mangle(FncDefAST *f, optional<string> tp);
 
         void genFnc(FncDefAST fn, optional<string> type, bool skipcheck);
-        void genFnc(OperatorDefAST fn, optional<string> type, bool skipcheck);
 
         void AST2IR();
         void genCompiledIn();

@@ -53,20 +53,6 @@ class BaseAST {
         virtual void dump() = 0;
 };
 
-/** Represents a callable node.
- */
-class Call {
-    public:
-        /** Get name of this node. */
-        virtual string getName() = 0;
-
-        /** Get arguments of this callable node. */
-        virtual deque<pair<string, TType>> getArgs() = 0;
-
-        /** Type of node, `F` for function, `O` for operator. */
-        virtual char getType() = 0;
-};
-
 /** Represents a block that can hold a value. */
 class Block {
     public:
@@ -230,27 +216,49 @@ class IncludeAST : public BaseAST {
         }
 };
 
+/** Represents a call to some function.
+ *
+ * Deque is needed for an implicit type parameter
+ */
+class FncCallAST : public BaseAST, public Expression {
+    public:
+        FncCallAST(string nm, /**< Function name */
+                   deque<shared_ptr<BaseAST>> ar, /**< Function arguments */
+                   char tt,  /**< Function or operator */
+                   optional<string> t = nullopt /**< Type, to which this function belongs or an empty string*/
+            ) : name(nm), args(ar), type(t), f_or_op(tt) {}
+
+        string name;
+        deque<shared_ptr<BaseAST>> args;
+        optional<string> type;
+        char f_or_op;
+
+        bool operator ==(FncCallAST &other) {
+            return (name == other.name) && (args == other.args) && (type == other.type);
+        }
+
+        void dump() {
+            Print::print("FncCall (", name, ")", "(");
+
+            OFFSET++;
+
+            for (auto &ar : args) {
+                ar->dump();
+            }
+
+            OFFSET--;
+
+            Print::print(")");
+        }
+};
+
 /** AST node that represents usage of an operator */
-class OperatorAST : public BaseAST, public Expression {
+class OperatorAST : public FncCallAST {
     public:
         OperatorAST(string nm, /**< Operator name, e.g. `+-` */
                     shared_ptr<BaseAST> l, /**< Value of LHS */
                     shared_ptr<BaseAST> r /**< Value of RHS */
-                    ) : name(nm), lhs(l), rhs(r) {}
-        string name;
-        shared_ptr<BaseAST> lhs;
-        shared_ptr<BaseAST> rhs;
-
-        void dump() {
-            Print::print("Operator (", name, ") (LHS, RHS) {");
-
-            OFFSET++;
-
-            lhs->dump();
-            rhs->dump();
-
-            Print::print("}");
-        }
+            ) : FncCallAST(nm, deque<shared_ptr<BaseAST>>{l,r}, 'O', nullopt) {}
 };
 
 /** Node that represents if (and optionally else) branch.
@@ -404,40 +412,6 @@ class ExternFncAST : public BaseAST {
         }
 };
 
-/** Represents a call to some function.
- *
- * Deque is needed for an implicit type parameter
- */
-class FncCallAST : public BaseAST, public Expression {
-    public:
-        FncCallAST(string nm, /**< Function name */
-                   deque<shared_ptr<BaseAST>> ar, /**< Function arguments */
-                   optional<string> t = nullopt /**< Type, to which this function belongs or an empty string*/
-                   ) : name(nm), args(ar), type(t) {}
-
-        string name;
-        deque<shared_ptr<BaseAST>> args;
-        optional<string> type;
-
-        bool operator ==(FncCallAST &other) {
-            return (name == other.name) && (args == other.args) && (type == other.type);
-        }
-
-        void dump() {
-            Print::print("FncCall (", name, ")", "(");
-
-            OFFSET++;
-
-            for (auto &ar : args) {
-                ar->dump();
-            }
-
-            OFFSET--;
-
-            Print::print(")");
-        }
-};
-
 /** Declaration of a variable and optionally it's value. */
 class DeclAST : public BaseAST {
     public:
@@ -465,7 +439,7 @@ class DeclAST : public BaseAST {
  * `Deque` is needed to insert implicit type parameter
  * when function is defined inside of `implement`
  */
-class FncDefAST : public BaseAST, public Call {
+class FncDefAST : public BaseAST {
     public:
         FncDefAST(string nm, /**< Function name*/
                   deque<pair<string, TType>> ar, /**< Function arguments */
@@ -502,10 +476,6 @@ class FncDefAST : public BaseAST, public Call {
 
             OFFSET--;
         }
-
-        string getName() { return name; }
-        deque<pair<string, TType>> getArgs() { return args; }
-        char getType() { return 'F'; }
 };
 
 /** Node that represents definition of an operator. */
@@ -531,8 +501,6 @@ class OperatorDefAST : public FncDefAST {
             OFFSET--;
             Print::print("}");
         }
-
-        char getType() { return 'O'; }
 };
 
 /** Node that represents implementing some functions for a type.

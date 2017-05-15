@@ -16,7 +16,7 @@ TEST_F(MangleTests, Function) {
                             map<string, TypedName>{});
 
     string r = mangle(&f, nullopt);
-    ASSERT_EQ(r, "_FFFN4testA3i32");
+    ASSERT_EQ(r, "_FFFN4testA3i32R3i32");
 }
 
 TEST_F(MangleTests, TypeFunction) {
@@ -27,7 +27,7 @@ TEST_F(MangleTests, TypeFunction) {
                             map<string, TypedName>{{"self", TypedName("self","test_ty")}});
 
     string r = mangle(&f, "test_ty");
-    ASSERT_EQ(r, "_FFFT7test_tyN4testA3i32");
+    ASSERT_EQ(r, "_FFFT7test_tyN4testA3i32R3i32");
 }
 
 TEST_F(MangleTests, Operator) {
@@ -39,10 +39,5 @@ TEST_F(MangleTests, Operator) {
                                  map<string, TypedName>{});
 
     string r = mangle(&f, nullopt);
-    ASSERT_EQ(r, "_FFON9i32+floatA3i325float");
-}
-
-TEST_F(MangleTests, LLVMFnc) {
-    string r = mangle(LLVMCall("test", deque<Type *>{getLLVMType(_TType::Int)}, 'F'), nullopt);
-    ASSERT_EQ(r, "_FFFN4testA3i32");
+    ASSERT_EQ(r, "_FFON9i32+floatA3i32A5floatR3i32");
 }
