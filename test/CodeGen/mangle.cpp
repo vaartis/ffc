@@ -5,7 +5,7 @@
 
 class MangleTests : public ::testing::Test, protected CodeGen {
     protected:
-        MangleTests() : CodeGen("", true) {}
+        MangleTests() : CodeGen("type test_ty { int x }", true) {}
 };
 
 TEST_F(MangleTests, Function) {
@@ -40,4 +40,17 @@ TEST_F(MangleTests, Operator) {
 
     string r = mangle(&f, nullopt);
     ASSERT_EQ(r, "_FFON9i32+floatA3i32A5floatR3i32");
+}
+
+TEST_F(MangleTests, LLVMFnAndGenFnc) {
+    FncDefAST f = FncDefAST("test",
+                            deque<pair<string, TType>>{{"x", _TType::Int}},
+                            _TType::Int,
+                            vector<shared_ptr<BaseAST>>{},
+                            map<string, TypedName>{});
+
+    genFnc(f, "test_ty", false);
+
+    string r = mangle(&f, "test_ty");
+    ASSERT_NO_THROW(mangle(functions.at("_FFFT7test_tyN4testA3i32R3i32"), struct_types.at("test_ty").type));
 }
