@@ -130,4 +130,5 @@ class CodeGen {
         void AST2IR();
         void genCompiledIn();
         Value *genExpr(shared_ptr<BaseAST> obj, bool noload);
+        void genStmt(shared_ptr<BaseAST> obj, bool noload);
 };

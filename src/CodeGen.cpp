@@ -213,53 +213,6 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
         }
     } else if (auto r = dynamic_cast<RefToValAST *>(obj.get())) {
         return genExpr(r->value, true);
-    } else if (auto decl = dynamic_cast<DeclAST *>(obj.get())) {
-        auto t = getLLVMType(decl->type);
-
-        Value *alloc = builder->CreateAlloca(t, nullptr, decl->name);
-
-        functions.at(curr_fn_name).variables.emplace(decl->name, alloc);
-
-        if (decl->value != nullptr) {
-            Value *v = genExpr(decl->value);
-
-            if (t != v->getType())
-                throw runtime_error(string("Invalid type assigned to ") + decl->name);
-
-            builder->CreateStore(v, alloc, false);
-
-            return v;
-        }
-        return alloc;
-    } else if (auto ass = dynamic_cast<AssAST *>(obj.get())) {
-        try {
-            auto var = functions.at(curr_fn_name).variables.at(ass->name);
-
-            Value *v = genExpr(ass->value);
-
-            if (v->getType() != var->getType()->getContainedType(0)) // var is always <type>* (alloca type), so we check the type it points to
-                throw runtime_error(string("Invalid type assigned to ") + ass->name);
-
-            builder->CreateStore(v, var, false);
-
-            return v;
-        } catch (out_of_range) {
-            throw runtime_error(string("Undefined variable: ") + ass->name);
-        }
-    } else if (auto ret = dynamic_cast<RetAST *>(obj.get())) {
-        if (ret->value != nullptr) {
-            Value *retxpr = genExpr(ret->value);
-
-            if (retxpr->getType() != functions.at(curr_fn_name).ret_type)
-                throw runtime_error("Invalid return type");
-
-            functions.at(curr_fn_name).exit_value = retxpr;
-        } else {
-            if (functions.at(curr_fn_name).ret_type != builder->getVoidTy())
-                throw runtime_error("Can't return nothing from a non-void function");
-        }
-
-        return builder->CreateBr(functions.at(curr_fn_name).exit_block);
     } else if (auto ca = dynamic_cast<FncCallAST *>(obj.get())) {
         LLVMFn callee;
         vector<Value *> argms;
@@ -340,41 +293,6 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
         } catch (out_of_range) {
             throw runtime_error("Unknown custom type: " + st->name);
         }
-    } else if (auto st = dynamic_cast<TypeFieldStoreAST  *>(obj.get())) {
-        Value *val;
-
-        try {
-            val = functions.at(curr_fn_name).variables.at(st->struct_name);
-        } catch(out_of_range) {
-            throw runtime_error(string("Undefined varible: ") + st->struct_name);
-        }
-
-        while (val->getType()->getContainedType(0)->isPointerTy())
-            val = builder->CreateLoad(val);
-        string type_name = val->getType()->getContainedType(0)->getStructName();
-
-        LLVMStruct s;
-
-        try {
-            s = struct_types.at(type_name);
-        } catch (out_of_range) {
-            throw runtime_error("Undefined custom type: " + type_name);
-        }
-
-        auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
-                                                                     if (v.first == st->field_name)
-                                                                         return true;
-                                                                     else
-                                                                         return false;
-                                                                 });
-        if (index_i == s.fields.end())
-            throw runtime_error("Unknown field: " + st->field_name);
-
-        unsigned int index = distance(s.fields.begin(), index_i);
-
-        Value *this_field = builder->CreateStructGEP(s.type, val, index);
-
-        return builder->CreateStore(genExpr(st->value), this_field);
     } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
         auto val = genExpr(st->from);
         auto tmpv = builder->CreateAlloca(val->getType());
@@ -416,31 +334,6 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
         } catch(out_of_range) {
             throw runtime_error(string("Undefined varible: ") + v->value);
         }
-    } else if (auto wh = dynamic_cast<WhileAST *>(obj.get())) {
-        BasicBlock *l_cond = BasicBlock::Create(context, "loop.cond");
-        BasicBlock *l_while  = BasicBlock::Create(context, "loop.while");
-        BasicBlock *l_end = BasicBlock::Create(context, "loop.end");
-
-        builder->CreateBr(l_cond);
-
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_cond);
-
-        builder->SetInsertPoint(l_cond);
-        Value *cond = genExpr(wh->cond);
-        builder->CreateCondBr(cond, l_while, l_end);
-
-        builder->SetInsertPoint(l_while);
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_while);
-        for (auto el : wh->body) {
-            genExpr(el);
-        }
-        builder->CreateBr(l_cond);
-
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_end);
-        builder->SetInsertPoint(l_end);
-
-        return cond;
-
     } else if (auto ifb = dynamic_cast<IfAST *>(obj.get())) {
         BasicBlock *then = BasicBlock::Create(context, "if.then");
         BasicBlock *els = BasicBlock::Create(context, "if.else");
@@ -500,6 +393,111 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
     }
 
     throw runtime_error("strange expr");
+}
+
+void CodeGen::genStmt(shared_ptr<BaseAST> obj, bool noload = false) {
+    if (auto decl = dynamic_cast<DeclAST *>(obj.get())) {
+        auto t = getLLVMType(decl->type);
+
+        Value *alloc = builder->CreateAlloca(t, nullptr, decl->name);
+
+        functions.at(curr_fn_name).variables.emplace(decl->name, alloc);
+
+        if (decl->value != nullptr) {
+            Value *v = genExpr(decl->value);
+
+            if (t != v->getType())
+                throw runtime_error(string("Invalid type assigned to ") + decl->name);
+
+            builder->CreateStore(v, alloc, false);
+        }
+    } else if (auto ass = dynamic_cast<AssAST *>(obj.get())) {
+        try {
+            auto var = functions.at(curr_fn_name).variables.at(ass->name);
+
+            Value *v = genExpr(ass->value);
+
+            if (v->getType() != var->getType()->getContainedType(0)) // var is always <type>* (alloca type), so we check the type it points to
+                throw runtime_error(string("Invalid type assigned to ") + ass->name);
+
+            builder->CreateStore(v, var, false);
+        } catch (out_of_range) {
+            throw runtime_error(string("Undefined variable: ") + ass->name);
+        }
+    } else if (auto ret = dynamic_cast<RetAST *>(obj.get())) {
+        if (ret->value != nullptr) {
+            Value *retxpr = genExpr(ret->value);
+
+            if (retxpr->getType() != functions.at(curr_fn_name).ret_type)
+                throw runtime_error("Invalid return type");
+
+            functions.at(curr_fn_name).exit_value = retxpr;
+        } else {
+            if (functions.at(curr_fn_name).ret_type != builder->getVoidTy())
+                throw runtime_error("Can't return nothing from a non-void function");
+        }
+
+        builder->CreateBr(functions.at(curr_fn_name).exit_block);
+    } else if (auto st = dynamic_cast<TypeFieldStoreAST  *>(obj.get())) {
+        Value *val;
+
+        try {
+            val = functions.at(curr_fn_name).variables.at(st->struct_name);
+        } catch(out_of_range) {
+            throw runtime_error(string("Undefined varible: ") + st->struct_name);
+        }
+
+        while (val->getType()->getContainedType(0)->isPointerTy())
+            val = builder->CreateLoad(val);
+        string type_name = val->getType()->getContainedType(0)->getStructName();
+
+        LLVMStruct s;
+
+        try {
+            s = struct_types.at(type_name);
+        } catch (out_of_range) {
+            throw runtime_error("Undefined custom type: " + type_name);
+        }
+
+        auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> v){
+                                                                     if (v.first == st->field_name)
+                                                                         return true;
+                                                                     else
+                                                                         return false;
+                                                                 });
+        if (index_i == s.fields.end())
+            throw runtime_error("Unknown field: " + st->field_name);
+
+        unsigned int index = distance(s.fields.begin(), index_i);
+
+        Value *this_field = builder->CreateStructGEP(s.type, val, index);
+
+        builder->CreateStore(genExpr(st->value), this_field);
+    } else if (auto wh = dynamic_cast<WhileAST *>(obj.get())) {
+        BasicBlock *l_cond = BasicBlock::Create(context, "loop.cond");
+        BasicBlock *l_while  = BasicBlock::Create(context, "loop.while");
+        BasicBlock *l_end = BasicBlock::Create(context, "loop.end");
+
+        builder->CreateBr(l_cond);
+
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_cond);
+
+        builder->SetInsertPoint(l_cond);
+        Value *cond = genExpr(wh->cond);
+        builder->CreateCondBr(cond, l_while, l_end);
+
+        builder->SetInsertPoint(l_while);
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_while);
+        for (auto el : wh->body) {
+            genExpr(el);
+        }
+        builder->CreateBr(l_cond);
+
+        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_end);
+        builder->SetInsertPoint(l_end);
+    } else {
+        genExpr(obj, noload);
+    }
 }
 
 /** Generate a function from an AST node.
