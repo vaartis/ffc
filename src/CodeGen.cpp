@@ -7,6 +7,26 @@ using mpark::variant;
 bool compiledInEmited = false;
 LLVMContext context;
 
+/** Name mangling implementation
+ *
+ * To provide generics ans operator overloading (and also name clashes), there is
+ * function name mangling. The name begins with `_FF`, then there is one character,
+ * `F` or `O`, for Function and Operator respectivly. Optionally, there might be a type
+ * function belongs to, `T(length of type name)(type name)`, for example `T7test_ty`.
+ * Next symbol is `N` followed by an integer, it says how long the name is,
+ * for example `N4test`. Then, for every argument there goes `A(length or argument type)(argument type)`,
+ * for example `A3i32A4float` for `f(int, float)`. The last one is `R(length of return type)(return type)`,
+ * if function does not return anything the return type is `void`. The complete example would look like this:
+ * `_FFFT7test_tyN4testAi32AfloatRint` for `implement for test_ty { fnc test(int x, float y) int }`
+ *
+ * | Symbol | Meaning                        |
+ * | :----: | :----------------------------: |
+ * | _FF    | Beggining of function name     |
+ * | T      | Type to which function belongs |
+ * | N      | Name of the function           |
+ * | A      | Type of function argument      |
+ * | R      | Function's return type         |
+ */
 string CodeGen::mangle(FncDefAST *f, optional<string> tp = nullopt) {
    string res_name = "_FF";
 
@@ -89,11 +109,6 @@ string CodeGen::mangle(LLVMFn f, optional<Type *> t = nullopt) {
     return res_name;
 }
 
-// _FF beginning
-// N name
-// A args
-// T if function is a member of type
-// R is function return type
 string CodeGen::mangle(FncCallAST *f, optional<string> tp = nullopt) {
     string res_name = "_FF" + string(1, f->f_or_op);
 

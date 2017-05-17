@@ -121,9 +121,9 @@ class CodeGen {
 
         string curr_fn_name;
 
+        string mangle(FncDefAST *f, optional<string> tp);
         string mangle(LLVMFn f, optional<Type *> tp);
         string mangle(FncCallAST *f, optional<string> tp);
-        string mangle(FncDefAST *f, optional<string> tp);
 
         void genFnc(FncDefAST fn, optional<string> type, bool skipcheck);
 
