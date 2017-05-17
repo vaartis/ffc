@@ -129,6 +129,10 @@ class CodeGen {
 
         void AST2IR();
         void genCompiledIn();
-        Value *genExpr(shared_ptr<BaseAST> obj, bool noload);
-        void genStmt(shared_ptr<BaseAST> obj, bool noload);
+        Value *genExpr(shared_ptr<BaseAST> obj, bool noload = false);
+        void genStmt(shared_ptr<BaseAST> obj, bool noload = false);
+
+        Value *genFncCall(FncCallAST *ca);
+        Value *genIf(IfAST *ifb);
+        Value *genType(TypeAST *st);
 };

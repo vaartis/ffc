@@ -189,7 +189,149 @@ Type *CodeGen::getLLVMType(TType t) {
           }, t.inner);
 }
 
-Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
+Value *CodeGen::genFncCall(FncCallAST *ca) {
+    LLVMFn callee;
+    vector<Value *> argms;
+    optional<string> tp;
+
+    if (ca->type.has_value()) {
+        tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType()->getStructName();
+    }
+
+    deque<Type *> mangle_args;
+    for (auto arg : ca->args) {
+        auto ar = genExpr(arg);
+
+        mangle_args.push_back(ar->getType());
+
+        argms.push_back(ar);
+    }
+
+    string name = ca->name;
+    if (find_if(exts.begin(), exts.end(), [&](ExternFncAST e){ return e.name == ca->name; }) == exts.end()) {
+        name = mangle(ca);
+    }
+
+    try {
+        callee = functions.at(name);
+    } catch(out_of_range) {
+        throw runtime_error(string("Undefined function: ") + ca->name);
+    }
+
+    if (callee.fn->arg_size() != ca->args.size())
+        throw runtime_error("Wrong number of args for function call: " + ca->name);
+
+    for (int i = 0; i < argms.size(); i++) {
+        Value *this_arg = argms[i];
+
+        int j = 0;
+        for (auto &ar : callee.fn->args())
+            if (j++ == i)
+                if (ar.getType() != this_arg->getType())
+                    throw runtime_error("Wrong type in function call: " + ca->name);
+    }
+
+    return builder->CreateCall(callee.fn, argms);
+}
+
+Value *CodeGen::genIf(IfAST *ifb) {
+    BasicBlock *then = BasicBlock::Create(context, "if.then");
+    BasicBlock *els = BasicBlock::Create(context, "if.else");
+    BasicBlock *ifend = BasicBlock::Create(context, "if.end");
+
+    Value *cond = genExpr(ifb->cond);
+
+    Value *c = builder->CreateCondBr(cond, then, els);
+
+    Value *if_val = nullptr, *else_val = nullptr;
+
+    // then
+
+    functions.at(curr_fn_name).fn->getBasicBlockList().push_back(then);
+    builder->SetInsertPoint(then);
+    for (auto v : ifb->body)
+        genStmt(v);
+
+    if (ifb->value != nullptr) {
+        if_val = genExpr(ifb->value);
+    }
+
+    then = builder->GetInsertBlock(); // update for phi
+
+    builder->CreateBr(ifend);
+
+    // else
+
+    functions.at(curr_fn_name).fn->getBasicBlockList().push_back(els);
+
+    builder->SetInsertPoint(els);
+    for (auto v : ifb->else_body)
+        genStmt(v);
+
+    if (ifb->else_value != nullptr) {
+        else_val = genExpr(ifb->else_value);
+    }
+
+    els = builder->GetInsertBlock(); // update for phi
+
+    builder->CreateBr(ifend);
+
+    functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
+    builder->SetInsertPoint(ifend);
+
+    if (if_val != nullptr && else_val != nullptr) {
+        assert(if_val->getType() == else_val->getType());
+
+        PHINode *if_res = builder->CreatePHI(if_val->getType(), 2, "if.expr.res");
+        if_res->addIncoming(if_val, then);
+        if_res->addIncoming(else_val, els);
+
+        return if_res;
+    }
+
+    return cond;
+}
+
+Value *CodeGen::genType(TypeAST *st) {
+    try {
+        auto e = static_cast<Expression>(*st);
+
+        LLVMStruct s;
+        if (e.expression_type.isGeneric()) {
+            s = struct_types.at(curr_generics_types.at(e.expression_type.to_string()));
+        } else {
+            s = struct_types.at(e.expression_type.to_string());
+        }
+
+        Value *tmp_struct = builder->CreateAlloca(s.type); // should be opimized out if unused
+
+        for (auto field : st->fields) {
+            string f_name = field.first;
+            Value *f_val = genExpr(field.second);
+
+            auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> val){
+                                                                         if (val.first == f_name)
+                                                                             return true;
+                                                                         else
+                                                                             return false;
+                                                                     });
+
+            if (index_i == s.fields.end())
+                throw runtime_error("Unknown field: " + f_name);
+
+            unsigned int index = distance(s.fields.begin(), index_i);
+
+            Value * this_field = builder->CreateStructGEP(s.type, tmp_struct, index);
+            builder->CreateStore(f_val, this_field);
+        }
+        return builder->CreateLoad(tmp_struct);
+
+    } catch (out_of_range) {
+        throw runtime_error("Unknown custom type: " + st->name);
+    }
+}
+
+Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload) {
     if (obj == nullptr)
         throw runtime_error("OBJECT IS A NULL POINTER");
 
@@ -214,85 +356,9 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
     } else if (auto r = dynamic_cast<RefToValAST *>(obj.get())) {
         return genExpr(r->value, true);
     } else if (auto ca = dynamic_cast<FncCallAST *>(obj.get())) {
-        LLVMFn callee;
-        vector<Value *> argms;
-        optional<string> tp;
-
-        if (ca->type.has_value()) {
-            tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType()->getStructName();
-        }
-
-        deque<Type *> mangle_args;
-        for (auto arg : ca->args) {
-            auto ar = genExpr(arg);
-
-            mangle_args.push_back(ar->getType());
-
-            argms.push_back(ar);
-        }
-
-        string name = ca->name;
-        if (find_if(exts.begin(), exts.end(), [&](ExternFncAST e){ return e.name == ca->name; }) == exts.end()) {
-            name = mangle(ca);
-        }
-
-        try {
-            callee = functions.at(name);
-        } catch(out_of_range) {
-            throw runtime_error(string("Undefined function: ") + ca->name);
-        }
-
-        if (callee.fn->arg_size() != ca->args.size())
-            throw runtime_error("Wrong number of args for function call: " + ca->name);
-
-        for (int i = 0; i < argms.size(); i++) {
-            Value *this_arg = argms[i];
-
-            int j = 0;
-            for (auto &ar : callee.fn->args())
-                if (j++ == i)
-                    if (ar.getType() != this_arg->getType())
-                        throw runtime_error("Wrong type in function call: " + ca->name);
-        }
-
-        return builder->CreateCall(callee.fn, argms);
+        return genFncCall(ca);
     } else if (auto st = dynamic_cast<TypeAST *>(obj.get())) {
-        try {
-            auto e = static_cast<Expression>(*st);
-
-            LLVMStruct s;
-            if (e.expression_type.isGeneric()) {
-                s = struct_types.at(curr_generics_types.at(e.expression_type.to_string()));
-            } else {
-                s = struct_types.at(e.expression_type.to_string());
-            }
-
-            Value *tmp_struct = builder->CreateAlloca(s.type); // should be opimized out if unused
-
-            for (auto field : st->fields) {
-                string f_name = field.first;
-                Value *f_val = genExpr(field.second);
-
-                auto index_i = find_if(s.fields.begin(), s.fields.end(), [&](pair<string, Type *> val){
-                                                                          if (val.first == f_name)
-                                                                              return true;
-                                                                          else
-                                                                              return false;
-                                                                      });
-
-                if (index_i == s.fields.end())
-                    throw runtime_error("Unknown field: " + f_name);
-
-                unsigned int index = distance(s.fields.begin(), index_i);
-
-                Value * this_field = builder->CreateStructGEP(s.type, tmp_struct, index);
-                builder->CreateStore(f_val, this_field);
-            }
-            return builder->CreateLoad(tmp_struct);
-
-        } catch (out_of_range) {
-            throw runtime_error("Unknown custom type: " + st->name);
-        }
+        genType(st);
     } else if (auto st = dynamic_cast<TypeFieldLoadAST  *>(obj.get())) {
         auto val = genExpr(st->from);
         auto tmpv = builder->CreateAlloca(val->getType());
@@ -335,67 +401,13 @@ Value *CodeGen::genExpr(shared_ptr<BaseAST> obj, bool noload = false) {
             throw runtime_error(string("Undefined varible: ") + v->value);
         }
     } else if (auto ifb = dynamic_cast<IfAST *>(obj.get())) {
-        BasicBlock *then = BasicBlock::Create(context, "if.then");
-        BasicBlock *els = BasicBlock::Create(context, "if.else");
-        BasicBlock *ifend = BasicBlock::Create(context, "if.end");
-
-        Value *cond = genExpr(ifb->cond);
-
-        Value *c = builder->CreateCondBr(cond, then, els);
-
-        Value *if_val = nullptr, *else_val = nullptr;
-
-        // then
-
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(then);
-        builder->SetInsertPoint(then);
-        for (auto v : ifb->body)
-            genExpr(v);
-
-        if (ifb->value != nullptr) {
-            if_val = genExpr(ifb->value);
-        }
-
-        then = builder->GetInsertBlock(); // update for phi
-
-        builder->CreateBr(ifend);
-
-        // else
-
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(els);
-
-        builder->SetInsertPoint(els);
-        for (auto v : ifb->else_body)
-            genExpr(v);
-
-        if (ifb->else_value != nullptr) {
-            else_val = genExpr(ifb->else_value);
-        }
-
-        els = builder->GetInsertBlock(); // update for phi
-
-        builder->CreateBr(ifend);
-
-        functions.at(curr_fn_name).fn->getBasicBlockList().push_back(ifend);
-        builder->SetInsertPoint(ifend);
-
-        if (if_val != nullptr && else_val != nullptr) {
-            assert(if_val->getType() == else_val->getType());
-
-            PHINode *if_res = builder->CreatePHI(if_val->getType(), 2, "if.expr.res");
-            if_res->addIncoming(if_val, then);
-            if_res->addIncoming(else_val, els);
-
-            return if_res;
-        }
-
-        return cond;
+        genIf(ifb);
     }
 
     throw runtime_error("strange expr");
 }
 
-void CodeGen::genStmt(shared_ptr<BaseAST> obj, bool noload = false) {
+void CodeGen::genStmt(shared_ptr<BaseAST> obj, bool noload) {
     if (auto decl = dynamic_cast<DeclAST *>(obj.get())) {
         auto t = getLLVMType(decl->type);
 
@@ -489,14 +501,14 @@ void CodeGen::genStmt(shared_ptr<BaseAST> obj, bool noload = false) {
         builder->SetInsertPoint(l_while);
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_while);
         for (auto el : wh->body) {
-            genExpr(el);
+            genStmt(el);
         }
         builder->CreateBr(l_cond);
 
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_end);
         builder->SetInsertPoint(l_end);
     } else {
-        genExpr(obj, noload);
+        genStmt(obj, noload);
     }
 }
 
@@ -554,7 +566,7 @@ void CodeGen::genFnc(FncDefAST fn, optional<string> type = nullopt, bool skipche
     functions.at(curr_fn_name).exit_value = exit_value;
 
     for (auto expr : fn.body) {
-        genExpr(expr);
+        genStmt(expr);
     }
 
     // Run destructors
