@@ -119,23 +119,24 @@ string CodeGen::mangle(FncCallAST *f, optional<string> tp = nullopt) {
     res_name += "N" + to_string(f->name.length()) + f->name;
 
     for (auto &arg : f->args) {
-            string arg_name;
+        res_name += "A";
+        string arg_name;
 
-            auto at = dynamic_cast<Expression *>(arg.get())->expression_type;
+        auto at = dynamic_cast<Expression *>(arg.get())->expression_type;
 
-            if (getLLVMType(at)->isStructTy()) {
-                arg_name = getLLVMType(at)->getStructName();
-            } else {
-                string useless;
-                raw_string_ostream name_s(useless);
-                Type *tt = getLLVMType(at);
+        if (getLLVMType(at)->isStructTy()) {
+            arg_name = getLLVMType(at)->getStructName();
+        } else {
+            string useless;
+            raw_string_ostream name_s(useless);
+            Type *tt = getLLVMType(at);
 
-                tt->print(name_s);
+            tt->print(name_s);
 
-                arg_name = name_s.str();
-            }
+            arg_name = name_s.str();
+        }
 
-            res_name += to_string(arg_name.length()) + arg_name;
+        res_name += to_string(arg_name.length()) + arg_name;
     }
 
 

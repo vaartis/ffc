@@ -54,3 +54,14 @@ TEST_F(MangleTests, LLVMFnAndGenFnc) {
     string r = mangle(&f, "test_ty");
     ASSERT_NO_THROW(mangle(functions.at("_FFFT7test_tyN4testA3i32R3i32"), struct_types.at("test_ty").type));
 }
+
+TEST_F(MangleTests, FncCall) {
+    shared_ptr<IntAST> in = make_shared<IntAST>(10);
+    in->expression_type = _TType::Int;
+
+    FncCallAST c("test_two", deque<shared_ptr<BaseAST>>{in}, 'F', nullopt);
+    c.expression_type = _TType::Int;
+    string asumed_name = mangle(&c, nullopt);
+
+    ASSERT_EQ(asumed_name, "_FFFN8test_twoA3i32R3i32");
+}
