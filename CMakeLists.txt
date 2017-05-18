@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.2)
 project(FF C CXX)
 
 include(ExternalProject)
+include(CheckCXXSourceCompiles)
 
 option(test "Build tests" OFF)
 
@@ -9,13 +10,14 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.0.0")
     message(FATAL_ERROR "At least GCC 7 is required")
   endif()
+  add_definitions(-std=c++17)
 endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.0.0")
     message(FATAL_ERROR "At least Clang 4 is required")
   endif()
-  add_definitions(-Wimplicit-fallthrough)
+  add_definitions(-Wimplicit-fallthrough -std=c++1z)
 endif()
 
 find_program(LLVM_CONFIG llvm-config)
@@ -42,15 +44,10 @@ link_directories(
   "${LLVM_LIBIR}"
   )
 
-add_definitions(
-  "${LLVM_CXX}"
-  -std=c++1z -g
-  -stdlib=libstdc++
-  )
+add_definitions("${LLVM_CXX}" -g)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeModules)
 
-include(CheckCXXSourceCompiles)
 CHECK_CXX_SOURCE_COMPILES("#include <optional>\n\rint main() { return 0; }" HAVE_OPTIONAL)
 
 if(test)

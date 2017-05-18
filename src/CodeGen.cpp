@@ -163,7 +163,7 @@ Type *CodeGen::getLLVMType(TType t) {
 
     return visit([&](auto arg) -> Type * {
               using T = decltype(arg);
-              if constexpr (is_same_v<_TType, T>) {
+              if constexpr (is_same<_TType, T>::value) {
                   switch (arg) {
                       case _TType::Int:
                           return builder->getInt32Ty();
@@ -176,13 +176,13 @@ Type *CodeGen::getLLVMType(TType t) {
                       case _TType::Str:
                           return builder->getInt8PtrTy();
                       }
-              } else if constexpr (is_same_v<string, T>) {
+              } else if constexpr (is_same<string, T>::value) {
                   try {
                       return struct_types.at(arg).type;
                   } catch (out_of_range) {
                       throw runtime_error("Unknown type: " + arg);
                   }
-              } else if constexpr (is_same_v<GenericType, T>) {
+              } else if constexpr (is_same<GenericType, T>::value) {
                   return getLLVMType(curr_generics_types.at(t.to_string()));
               } else {
                   throw runtime_error("Bug");
@@ -196,7 +196,7 @@ Value *CodeGen::genFncCall(FncCallAST *ca) {
     optional<string> tp;
 
     if (ca->type) {
-        tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType()->getStructName();
+        tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType()->getStructName().str();
     }
 
     deque<Type *> mangle_args;

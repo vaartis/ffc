@@ -1,3 +1,4 @@
+#include "optional.hpp"
 #include <sstream>
 #include <map>
 #include <deque>
@@ -6,8 +7,6 @@
 #include <vector>
 #include <algorithm>
 #include <tuple>
-
-#include "optional.hpp"
 
 #include <assert.h>
 

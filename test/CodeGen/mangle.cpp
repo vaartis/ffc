@@ -26,7 +26,7 @@ TEST_F(MangleTests, TypeFunction) {
                             vector<shared_ptr<BaseAST>>{},
                             map<string, TypedName>{{"self", TypedName("self","test_ty")}});
 
-    string r = mangle(&f, "test_ty");
+    string r = mangle(&f, string("test_ty"));
     ASSERT_EQ(r, "_FFFT7test_tyN4testA3i32R3i32");
 }
 
@@ -49,9 +49,9 @@ TEST_F(MangleTests, LLVMFnAndGenFnc) {
                             vector<shared_ptr<BaseAST>>{},
                             map<string, TypedName>{});
 
-    genFnc(f, "test_ty", false);
+    genFnc(f, string("test_ty"), false);
 
-    string r = mangle(&f, "test_ty");
+    string r = mangle(&f, string("test_ty"));
     ASSERT_NO_THROW(mangle(functions.at("_FFFT7test_tyN4testA3i32R3i32"), struct_types.at("test_ty").type));
 }
 

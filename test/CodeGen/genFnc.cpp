@@ -49,9 +49,9 @@ TEST_F(GenFncTests, TypeFnc) {
                             _TType::Int,
                             vector<shared_ptr<BaseAST>>{},
                             map<string, TypedName>{{"var", TypedName("var", _TType::Int)}});
-    genFnc(f, "test_ty", false);
+    genFnc(f, string("test_ty"), false);
 
-    string n = mangle(&f, "test_ty");
+    string n = mangle(&f, string("test_ty"));
 
     LLVMFn l_testf;
     ASSERT_NO_THROW(l_testf = functions.at(n));
