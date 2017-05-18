@@ -45,9 +45,13 @@ link_directories(
 add_definitions(
   "${LLVM_CXX}"
   -std=c++1z -g
+  -stdlib=libstdc++
   )
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeModules)
+
+include(CheckCXXSourceCompiles)
+CHECK_CXX_SOURCE_COMPILES("#include <optional>\n\rint main() { return 0; }" HAVE_OPTIONAL)
 
 if(test)
   message(STATUS "Tests are enabled")

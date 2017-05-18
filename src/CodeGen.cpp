@@ -36,7 +36,7 @@ string CodeGen::mangle(FncDefAST *f, optional<string> tp = nullopt) {
         res_name += "F";
     }
 
-    if (tp.has_value()) {
+    if (tp) {
         res_name += "T" + to_string(tp.value().length()) + tp.value();
     }
 
@@ -74,7 +74,7 @@ string CodeGen::mangle(FncDefAST *f, optional<string> tp = nullopt) {
 string CodeGen::mangle(LLVMFn f, optional<Type *> t = nullopt) {
     string res_name("_FF" + string(1, f.type));
 
-    if (t.has_value()) {
+    if (t) {
         auto tp = t.value();
         while (tp->isPointerTy())
             tp = tp->getContainedType(0);
@@ -112,7 +112,7 @@ string CodeGen::mangle(LLVMFn f, optional<Type *> t = nullopt) {
 string CodeGen::mangle(FncCallAST *f, optional<string> tp = nullopt) {
     string res_name = "_FF" + string(1, f->f_or_op);
 
-    if (tp.has_value()) {
+    if (tp) {
         res_name += "T" + to_string(tp.value().length()) + tp.value();
     }
 
@@ -195,7 +195,7 @@ Value *CodeGen::genFncCall(FncCallAST *ca) {
     vector<Value *> argms;
     optional<string> tp;
 
-    if (ca->type.has_value()) {
+    if (ca->type) {
         tp = functions.at(curr_fn_name).variables.at(ca->type.value())->getType()->getStructName();
     }
 
@@ -585,7 +585,7 @@ void CodeGen::genFnc(FncDefAST fn, optional<string> type = nullopt, bool skipche
                 tp = tp->getContainedType(0);
 
             if (tp->isStructTy()) {
-                if (type.has_value()) { // do not run destructor in yourself's destructor
+                if (type) { // do not run destructor in yourself's destructor
                     if (fn_vars.at("self")->getType()->getContainedType(0) == getLLVMType(type.value()))
                         break;
                 }

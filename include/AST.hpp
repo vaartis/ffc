@@ -5,7 +5,8 @@
 #include <vector>
 #include <deque>
 #include <iostream>
-#include <optional>
+
+#include "optional.hpp"
 
 using std::string;
 using std::unique_ptr;
@@ -16,8 +17,6 @@ using std::pair;
 using std::ostream;
 using std::cout;
 using std::endl;
-using std::optional;
-using std::nullopt;
 
 static unsigned int OFFSET = 0;
 static bool WAS_O = false;

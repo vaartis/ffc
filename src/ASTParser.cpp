@@ -6,7 +6,8 @@
 #include <vector>
 #include <algorithm>
 #include <tuple>
-#include <optional>
+
+#include "optional.hpp"
 
 #include <assert.h>
 
@@ -899,7 +900,7 @@ shared_ptr<BaseAST> ASTParser::parseTypeFncCall(shared_ptr<BaseAST> st) {
         }
     }
 loope:
-    if (!etp.has_value()) {
+    if (!etp) {
         throw runtime_error("No function " + f_name + " in type " + tp_name);
     } else {
         res->expression_type = etp.value();

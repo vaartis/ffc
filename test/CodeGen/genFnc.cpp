@@ -1,7 +1,6 @@
-#include <optional>
-
 #include "gtest/gtest.h"
 #include "CodeGen.hpp"
+#include "optional.hpp"
 
 class GenFncTests : public ::testing::Test, protected CodeGen {
     protected:

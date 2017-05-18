@@ -6,8 +6,7 @@
 #include <vector>
 #include <sstream>
 #include <tuple>
-#include <optional>
-
+#include "optional.hpp"
 #include "ParserShared.hpp"
 #include "AST.hpp"
 #include "TokenStream.hpp"
@@ -21,7 +20,6 @@ using std::pair;
 using std::exception;
 using std::stringstream;
 using std::tuple;
-using std::optional;
 
 class GenericFncInfo {
     public:

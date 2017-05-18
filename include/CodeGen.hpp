@@ -15,7 +15,8 @@
 #include <sstream>
 #include <memory>
 #include <functional>
-#include <optional>
+
+#include "optional.hpp"
 #include "mpark/variant.hpp"
 
 #include "ASTParser.hpp"
