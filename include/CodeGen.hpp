@@ -46,7 +46,7 @@ class CodeGen {
     public:
         CodeGen(string s, bool is_from_string = false) {
             if (!is_from_string) {
-                fname = s.substr(0, s.length() - 3);
+                fname = s.substr(0, s.rfind("."));
             }
 
             module = std::make_unique<Module>(fname, context); // .ff
@@ -54,7 +54,7 @@ class CodeGen {
 
             string parser_text;
             if (!is_from_string) {
-                parser_text = getFileContent(fname + ".ff");
+                parser_text = getFileContent(s);
             } else {
                 parser_text = s;
             }
