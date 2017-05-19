@@ -10,14 +10,19 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "7.0.0")
     message(FATAL_ERROR "At least GCC 7 is required")
   endif()
-  add_definitions(-std=c++17)
 endif()
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.0.0")
     message(FATAL_ERROR "At least Clang 4 is required")
   endif()
-  add_definitions(-Wimplicit-fallthrough -std=c++1z)
+  add_definitions(-Wimplicit-fallthrough)
+endif()
+
+set(CMAKE_REQUIRED_FLAGS "-std=c++1z")
+CHECK_CXX_SOURCE_COMPILES("#include <optional>\n\rint main() { return 0; }" HAVE_OPTIONAL)
+if (HAVE_OPTIONAL)
+  add_definitions(-DHAVE_OPTIONAL)
 endif()
 
 find_program(LLVM_CONFIG llvm-config)
@@ -41,24 +46,29 @@ include_directories(
   "${LLVM_INCLUDE}"
   )
 link_directories(
-  "${LLVM_LIBIR}"
+  "${LLVM_LIBDIR}"
   )
 
-add_definitions("${LLVM_CXX}" -g)
+add_definitions("${LLVM_CXX}" -g -std=c++1z)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/CMakeModules)
 
-CHECK_CXX_SOURCE_COMPILES("#include <optional>\n\rint main() { return 0; }" HAVE_OPTIONAL)
-
 if(test)
-  message(STATUS "Tests are enabled")
-  find_program(GTEST_CONFIG gtest-config)
-  execute_process(COMMAND ${GTEST_CONFIG} --includedir OUTPUT_VARIABLE GTEST_INCLUDE OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(COMMAND ${GTEST_CONFIG} --libs OUTPUT_VARIABLE GTEST_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
-  execute_process(COMMAND ${GTEST_CONFIG} --libdir OUTPUT_VARIABLE GTEST_LIBDIR OUTPUT_STRIP_TRAILING_WHITESPACE)
+  ExternalProject_Add(GTest
+    GIT_REPOSITORY "https://github.com/google/googletest"
 
-  include_directories("${GTEST_INCLUDE}")
-  link_directories("${GTEST_LIBDIR}")
+    PREFIX "${CMAKE_SOURCE_DIR}/deps/download/gtest"
+
+    UPDATE_COMMAND ""
+    CMAKE_ARGS "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DBUILD_GMOCK=OFF" "-DBUILD_GTEST=ON" "-DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/gtest")
+
+
+  list(APPEND DEPS GTest)
+
+  message(STATUS "Tests are enabled")
+
+  include_directories("deps/gtest/include")
+  link_directories("deps/gtest/lib")
 
   file(GLOB tests_SRC "test/*/*.cpp")
   list(APPEND tests_SRC "src/ASTParser.cpp" "src/TokenStream.cpp" "src/CodeGen.cpp")
@@ -66,8 +76,7 @@ if(test)
   add_executable(run_tests ${tests_SRC})
   add_dependencies(run_tests ${DEPS})
 
-  include_directories(${GTEST_INCLUDE_DIRS})
-  target_link_libraries(run_tests "${GTEST_LIBS}" gtest_main "${LLVM_LIBS}" pthread)
+  target_link_libraries(run_tests "${LLVM_LIBS}" gtest gtest_main pthread)
 else()
   file(GLOB ff_SRC "src/*.cpp")
 

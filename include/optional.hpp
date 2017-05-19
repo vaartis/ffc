@@ -1,3 +1,5 @@
+#pragma once
+
 #ifdef HAVE_OPTIONAL
     #include <optional>
     using std::optional;

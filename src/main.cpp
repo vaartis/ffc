@@ -19,9 +19,8 @@ int main(int argc, char *argv[]) {
 
     CodeGen codegen(argv[1]);
 
-    Linker l(*codegen.module);
     for (auto &in : codegen.includes) {
-        l.linkInModule(move(in));
+        Linker::linkModules(*codegen.module, move(in));
     }
 
     PassManager<Module> pm;
