@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
     pm.run(*codegen.module, am);
 
     string fname = string(argv[1]);
-    fname = fname.substr(0, fname.length() - 3);
+    fname = fname.substr(0, fname.rfind("."));
 
     ofstream file(fname + ".ll");
     raw_os_ostream outfile(file);
