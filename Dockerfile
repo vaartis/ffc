@@ -2,7 +2,7 @@
 FROM fedora:rawhide
 
 # Install CMake, compilers, GTest
-RUN dnf install -y wget cmake make gcc-c++ pkgconfig git llvm\
+RUN dnf install -y wget cmake make gcc-c++ clang pkgconfig git llvm\
                    llvm-libs llvm-devel libedit-devel zlib-devel\
                    elfutils-devel libcurl-devel python2
 
