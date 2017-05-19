@@ -509,7 +509,7 @@ void CodeGen::genStmt(shared_ptr<BaseAST> obj, bool noload) {
         functions.at(curr_fn_name).fn->getBasicBlockList().push_back(l_end);
         builder->SetInsertPoint(l_end);
     } else {
-        genStmt(obj, noload);
+        genExpr(obj, noload);
     }
 }
 
