@@ -86,7 +86,7 @@ class CodeGen {
         vector<string> real_names;
 
         vector<ExternFncAST> exts;
-        vector<OperatorDefAST> ops;
+        map<string, OperatorDefAST> ops;
         vector<IncludeAST> incls;
         vector<ImplementAST> impls;
         map<string, TypeDefAST> typedefs;
@@ -122,18 +122,18 @@ class CodeGen {
 
         string curr_fn_name;
 
-        string mangle(FncDefAST *f, optional<string> tp);
+        string mangle(FncDefAST &f, optional<string> tp);
         string mangle(LLVMFn f, optional<Type *> tp);
-        string mangle(FncCallAST *f, optional<string> tp);
+        string mangle(FncCallAST f, optional<string> tp);
 
-        void genFnc(FncDefAST fn, optional<string> type, bool skipcheck);
+        void genFnc(FncDefAST &fn, optional<string> type, bool skipcheck);
 
         void AST2IR();
         void genCompiledIn();
         Value *genExpr(shared_ptr<BaseAST> obj, bool noload = false);
         void genStmt(shared_ptr<BaseAST> obj, bool noload = false);
 
-        Value *genFncCall(FncCallAST *ca);
+        Value *genFncCall(FncCallAST ca);
         Value *genIf(IfAST *ifb);
         Value *genType(TypeAST *st);
 };

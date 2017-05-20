@@ -47,9 +47,9 @@ class ASTParser {
 
         vector<FncDefAST> functions; /**< Top level functions */
         vector<ExternFncAST> ext_functions; /**< Externs */
-        vector<OperatorDefAST> operators; /**< Operator definitions */
         vector<IncludeAST> includes; /**< Includes */
         vector<ImplementAST> impls; /**< Implementations of functions for some types */
+        map<string, OperatorDefAST> operators; /**< Operator definitions */
         map<string, TypeDefAST> typedefs; /**< Custom type definitions */
 
         map<string, vector<string>> generic_types;
@@ -73,11 +73,11 @@ class ASTParser {
 
         IncludeAST parseInclude();
         FncDefAST parseFncDef();
-        OperatorDefAST parseOperatorDef();
         GenericFncInfo parseGenericFncDef();
         ExternFncAST parseExternFnc();
         ImplementAST parseImplement();
         void parseTypeDef();
+        void parseOperatorDef();
 
         #define gen_parse(wh, ...) shared_ptr<BaseAST> parse##wh(__VA_ARGS__);
 
@@ -90,6 +90,8 @@ class ASTParser {
         deque<pair<string, TType>> parseFncArgs(map<string, TypedName> &where);
 
         pair<vector<shared_ptr<BaseAST>>, shared_ptr<BaseAST>> parseBlock();
+
+        void genCompiledIn();
 
         gen_parse(Var, TType)
         gen_parse(Ass)

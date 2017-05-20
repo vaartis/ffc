@@ -30,6 +30,7 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
     currTok = Token::None;
     if (IdentStr.length() == 0)
         getNextTok();
+    genCompiledIn();
     while (true) {
         switch(currTok) {
             case Token::Eof:
@@ -38,7 +39,7 @@ ASTParser::ASTParser(string s) : tokens(TokenStream(s)) {
                 functions.push_back(parseFncDef());
                 break;
             case Token::OperatorDef:
-                operators.push_back(parseOperatorDef());
+                parseOperatorDef();
                 break;
             case Token::Extern:
                 ext_functions.push_back(parseExternFnc());
@@ -458,7 +459,7 @@ GenericFncInfo ASTParser::parseGenericFncDef() {
     return res;
 }
 
-OperatorDefAST ASTParser::parseOperatorDef() {
+void ASTParser::parseOperatorDef() {
     getNextTok(); // eat operator
 
     assert(currTok == Token::Operator);
@@ -488,7 +489,8 @@ OperatorDefAST ASTParser::parseOperatorDef() {
 
     auto res = OperatorDefAST(name, base_name, args, ret_type, body, curr_defined_variables);
     curr_defined_variables.clear();
-    return res;
+
+    operators.emplace(res.name, res);
 }
 
 /** Parses function definition. */
@@ -841,6 +843,57 @@ shared_ptr<BaseAST> ASTParser::parseAss() {
     return make_shared<AssAST>(name, parseExpr());
 }
 
+void ASTParser::genCompiledIn() { // Always inline compiled in & optimize out unused
+    auto defOp = [&](tuple<string, TType, TType, TType> fncdef) {
+        string op = get<0>(fncdef);
+        TType tt1 = get<1>(fncdef);
+        TType tt2 = get<2>(fncdef);
+        TType rret = get<3>(fncdef);
+
+
+
+        OperatorDefAST o(tt1.to_string() + op + tt2.to_string(),
+                         op,
+                         deque<pair<string, TType>>{{"x", tt1}, {"y", {tt2}}},
+                         rret,
+                         vector<shared_ptr<BaseAST>>{},
+                         map<string, TypedName>{});
+
+        operators.emplace(o.name, o);
+    };
+
+    #define genTuple(c, t1, t2, ret) {c, _TType::t1, _TType::t2, _TType::ret}
+
+    vector<tuple<string, TType, TType, TType>> ops{
+        // Basic integer operators
+        genTuple("+", Int, Int, Int),
+        genTuple("-", Int, Int, Int),
+        genTuple("*", Int, Int, Int),
+        genTuple("/", Int, Int, Int),
+        // Integer compare
+        genTuple("==", Int, Int, Bool),
+        genTuple("!=", Int, Int, Bool),
+        genTuple(">", Int, Int, Bool),
+        genTuple("<", Int, Int, Bool),
+        // Basic float operators
+        genTuple("+", Float, Float, Float),
+        genTuple("-", Float, Float, Float),
+        genTuple("*", Float, Float, Float),
+        genTuple("/", Float, Float, Float),
+        // Float compare
+        genTuple("==", Float, Float, Bool),
+        genTuple("!=", Float, Float, Bool),
+        genTuple(">", Float, Float, Bool),
+        genTuple("<", Float, Float, Bool),
+    };
+
+    for (auto o : ops) {
+        defOp(o);
+    }
+}
+
+
+
 /** Parse operator usage. */
 shared_ptr<BaseAST> ASTParser::parseOperator(shared_ptr<BaseAST> lhs) {
     string name = IdentStr;
@@ -852,8 +905,11 @@ shared_ptr<BaseAST> ASTParser::parseOperator(shared_ptr<BaseAST> lhs) {
     if (auto l = dynamic_cast<Expression *>(lhs.get()), r = dynamic_cast<Expression *>(rhs.get()); l && r) {
         string op_full = l->expression_type.to_string() + name + r->expression_type.to_string();
 
-        if (auto op = find_if(operators.begin(), operators.end(), [&](OperatorDefAST o) { return o.name == op_full; }); op != operators.end()) {
-            res->expression_type = op->ret_type;
+
+        try {
+            res->expression_type = operators.at(op_full).ret_type;
+        } catch (out_of_range) {
+            throw runtime_error("Undefined operator: " + op_full);
         }
     } else {
         throw runtime_error("Somehow not an expression");

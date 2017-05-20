@@ -110,9 +110,9 @@ class TType {
 
         string to_string() {
             if (isRef()) {
-                return referenceTo->to_string();
+                return "ref_" + referenceTo->to_string();
             } else if (isDeref()) {
-                return dereferenceTo->to_string();
+                return "val_" + dereferenceTo->to_string();
             } else if (holds_alternative<GenericType>(inner)) {
                 return get<GenericType>(inner).name;
             } else if (holds_alternative<_TType>(inner)) {

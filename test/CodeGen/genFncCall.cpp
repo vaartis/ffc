@@ -10,12 +10,12 @@ class GenFncCallTests : public ::testing::Test, protected CodeGen {
 
 TEST_F(GenFncCallTests, NoParams) {
     FncCallAST c("test_one", deque<shared_ptr<BaseAST>>{}, 'F', nullopt);
-    Value *res = genFncCall(&c);
+    Value *res = genFncCall(c);
 
     CallInst *call = dynamic_cast<CallInst *>(res);
     ASSERT_NE(call, nullptr);
 
-    string asumed_name = mangle(&c, nullopt);
+    string asumed_name = mangle(c, nullopt);
 
     ASSERT_EQ(call->getNumArgOperands(), 0);
 
@@ -32,9 +32,9 @@ TEST_F(GenFncCallTests, Simple) {
 
     FncCallAST c("tt", deque<shared_ptr<BaseAST>>{in}, 'F', nullopt);
     c.expression_type = _TType::Int;
-    string asumed_name = mangle(&c, nullopt);
+    string asumed_name = mangle(c, nullopt);
 
-    CallInst *call = dynamic_cast<CallInst *>(genFncCall(&c));
+    CallInst *call = dynamic_cast<CallInst *>(genFncCall(c));
     ASSERT_NE(call, nullptr);
 
     call->moveBefore(&call->getCalledFunction()->getEntryBlock().front());

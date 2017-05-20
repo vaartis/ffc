@@ -15,7 +15,7 @@ TEST_F(GenFncTests, Simple) {
                             map<string, TypedName>{{"var", TypedName("var", _TType::Int)}});
     genFnc(f, nullopt, false);
 
-    string n = mangle(&f, nullopt);
+    string n = mangle(f, nullopt);
 
     LLVMFn l_testf;
     ASSERT_NO_THROW(l_testf = functions.at(n));
@@ -25,7 +25,7 @@ TEST_F(GenFncTests, Simple) {
 }
 
 TEST_F(GenFncTests, Operator) {
-    FncDefAST f = OperatorDefAST("i32+float",
+    OperatorDefAST f = OperatorDefAST("i32+float",
                                  "+",
                                  deque<pair<string, TType>>{{"x", _TType::Int}},
                                  _TType::Int,
@@ -33,7 +33,7 @@ TEST_F(GenFncTests, Operator) {
                                  map<string, TypedName>{{"var", TypedName("var", _TType::Int)}});
     genFnc(f, nullopt, false);
 
-    string n = mangle(&f, nullopt);
+    string n = mangle(f, nullopt);
 
     LLVMFn l_testf;
     ASSERT_NO_THROW(l_testf = functions.at(n));
@@ -51,7 +51,7 @@ TEST_F(GenFncTests, TypeFnc) {
                             map<string, TypedName>{{"var", TypedName("var", _TType::Int)}});
     genFnc(f, string("test_ty"), false);
 
-    string n = mangle(&f, string("test_ty"));
+    string n = mangle(f, string("test_ty"));
 
     LLVMFn l_testf;
     ASSERT_NO_THROW(l_testf = functions.at(n));

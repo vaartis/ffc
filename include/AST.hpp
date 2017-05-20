@@ -486,7 +486,7 @@ class OperatorDefAST : public FncDefAST {
                        TType t, /**< Return type */
                        vector<shared_ptr<BaseAST>> bd, /**< Function body */
                        map<string, TypedName> d_v
-            ) : FncDefAST(nm, params, t, bd, d_v), base_name(b_n) { }
+            ) : FncDefAST(nm, params, t, bd, d_v), base_name(b_n) {}
 
         string base_name;
 

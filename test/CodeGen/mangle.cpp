@@ -15,7 +15,7 @@ TEST_F(MangleTests, Function) {
                             vector<shared_ptr<BaseAST>>{},
                             map<string, TypedName>{});
 
-    string r = mangle(&f, nullopt);
+    string r = mangle(f, nullopt);
     ASSERT_EQ(r, "_FFFN4testA3i32R3i32");
 }
 
@@ -26,7 +26,7 @@ TEST_F(MangleTests, TypeFunction) {
                             vector<shared_ptr<BaseAST>>{},
                             map<string, TypedName>{{"self", TypedName("self","test_ty")}});
 
-    string r = mangle(&f, string("test_ty"));
+    string r = mangle(f, string("test_ty"));
     ASSERT_EQ(r, "_FFFT7test_tyN4testA3i32R3i32");
 }
 
@@ -38,8 +38,8 @@ TEST_F(MangleTests, Operator) {
                                  vector<shared_ptr<BaseAST>>{},
                                  map<string, TypedName>{});
 
-    string r = mangle(&f, nullopt);
-    ASSERT_EQ(r, "_FFON9i32+floatA3i32A5floatR3i32");
+    string r = mangle(f, nullopt);
+    ASSERT_EQ(r, "_FFON1+A3i32A5floatR3i32");
 }
 
 TEST_F(MangleTests, LLVMFnAndGenFnc) {
@@ -51,7 +51,7 @@ TEST_F(MangleTests, LLVMFnAndGenFnc) {
 
     genFnc(f, string("test_ty"), false);
 
-    string r = mangle(&f, string("test_ty"));
+    string r = mangle(f, string("test_ty"));
     ASSERT_NO_THROW(mangle(functions.at("_FFFT7test_tyN4testA3i32R3i32"), struct_types.at("test_ty").type));
 }
 
@@ -61,7 +61,7 @@ TEST_F(MangleTests, FncCall) {
 
     FncCallAST c("test_two", deque<shared_ptr<BaseAST>>{in}, 'F', nullopt);
     c.expression_type = _TType::Int;
-    string asumed_name = mangle(&c, nullopt);
+    string asumed_name = mangle(c, nullopt);
 
     ASSERT_EQ(asumed_name, "_FFFN8test_twoA3i32R3i32");
 }
