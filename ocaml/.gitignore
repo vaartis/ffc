@@ -1,0 +1,6 @@
+*.cm*
+*.mli
+*.o
+lexer.ml
+parser.ml
+main
