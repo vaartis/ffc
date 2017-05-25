@@ -13,6 +13,13 @@ let string_of_ttype x =
   | Void -> "Void"
   | Custom(x) -> x
 
+let ttype_of_string x =
+  match x with
+  | "int" -> Int
+  | "float" -> Float
+  | "str" -> Str
+  | _ -> Void
+
 class virtual base_ast = object
           method virtual dump : string
         end;;
@@ -41,9 +48,21 @@ class int_ast value = object(self)
     "Int(" ^ (string_of_int value) ^ ")"
 end;;
 
+class float_ast value = object(self)
+  inherit base_ast
+  method dump =
+    "Float(" ^ (string_of_float value) ^ ")"
+end;;
+
+class str_ast value = object(self)
+  inherit base_ast
+  method dump =
+    "Str(" ^ value ^ ")"
+end;;
+
 class fnc_def_ast name
                   (args : (string * ttype) list)
-                  (body : expression list)
+                  (body : statement list)
                   ret_t = object(self)
   inherit toplevel
 
