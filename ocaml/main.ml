@@ -11,4 +11,4 @@ let set_filename (fname:string) (lexbuf:Lexing.lexbuf) =
 let _ =
   let lexbuf = set_filename "stdin" @@ Lexing.from_channel stdin in
   let ast = Parser.main Lexer.token lexbuf in
-  List.iter (fun x -> print_string x#dump) ast;;
+  List.iter (fun x -> print_endline x#dump) ast;;

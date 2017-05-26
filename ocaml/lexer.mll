@@ -12,6 +12,7 @@ rule token = parse
      | "fnc" { FNC }
      | "type" { TYPE_KW }
      | "include" { INCLUDE }
+     | "extern" { EXTERN }
      | '\"' ( [^'\"']+ as st ) '\"' { STR(st) }
      | eof { EOF }
      | '(' { OP_P }

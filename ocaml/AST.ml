@@ -79,5 +79,12 @@ class type_def_ast name (fields : (string * ttype) list) = object
   method dump =
     let fld_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) fields in
     "TypeDef " ^ name ^ " {\n" ^ (String.concat ",\n" fld_str) ^ "\n}"
+end;;
 
+class extern_ast name (args : ttype list) = object
+  inherit toplevel
+
+  method dump =
+    let fld_str = List.map string_of_ttype args in
+    "Extern " ^ name ^ "(" ^ (String.concat ", " fld_str) ^ ")\n"
 end;;
