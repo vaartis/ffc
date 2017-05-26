@@ -12,6 +12,9 @@ rule token = parse
      | "fnc" { FNC }
      | "type" { TYPE_KW }
      | "include" { INCLUDE }
+     | "operator" { OPERATOR_KW }
+     | ['!' '~' '@' '#' '$' '%' '^' '&' '*' '-' '+' '\\' '/' '<' '>']['!' '~' '@' '#' '$' '%' '^' '&' '*' '-' '+' '\\' '/' '<' '>' '=']*
+                                                        { OPERATOR(Lexing.lexeme lexbuf)}
      | "extern" { EXTERN }
      | '\"' ( [^'\"']+ as st ) '\"' { STR(st) }
      | eof { EOF }

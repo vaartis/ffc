@@ -73,6 +73,16 @@ class fnc_def_ast name
       (String.concat "\n" body_str) ^ "\n}"
 end;;
 
+class operator_def_ast name args body ret_t = object
+  inherit fnc_def_ast name args body ret_t
+
+  method dump =
+    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args in
+    let body_str = List.map (fun x -> x#dump) body in
+    "OperatorDef " ^ name ^ "(" ^ (String.concat ", " arg_str) ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^
+      (String.concat "\n" body_str) ^ "\n}"
+end;;
+
 class type_def_ast name (fields : (string * ttype) list) = object
   inherit toplevel
 
