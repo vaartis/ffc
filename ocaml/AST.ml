@@ -67,20 +67,18 @@ class fnc_def_ast name
   inherit toplevel
 
   method dump =
-    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args in
-    let body_str = List.map (fun x -> x#dump) body in
-    "FncDef " ^ name ^ "(" ^ (String.concat ", " arg_str) ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^
-      (String.concat "\n" body_str) ^ "\n}"
+    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args |> String.concat ", " in
+    let body_str = List.map (fun x -> x#dump) body |> String.concat "\n" in
+    "FncDef " ^ name ^ "(" ^ arg_str ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^ body_str ^ "\n}"
 end;;
 
 class operator_def_ast name args body ret_t = object
   inherit fnc_def_ast name args body ret_t
 
   method dump =
-    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args in
-    let body_str = List.map (fun x -> x#dump) body in
-    "OperatorDef " ^ name ^ "(" ^ (String.concat ", " arg_str) ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^
-      (String.concat "\n" body_str) ^ "\n}"
+    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args |> String.concat ", " in
+    let body_str = List.map (fun x -> x#dump) body |> String.concat "\n" in
+    "OperatorDef " ^ name ^ "(" ^ arg_str ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^ body_str ^ "\n}"
 end;;
 
 class type_def_ast name (fields : (string * ttype) list) = object
@@ -97,4 +95,11 @@ class extern_ast name (args : ttype list) = object
   method dump =
     let fld_str = List.map string_of_ttype args in
     "Extern " ^ name ^ "(" ^ (String.concat ", " fld_str) ^ ")\n"
+end;;
+
+class implement_ast tp (functions : fnc_def_ast list) = object
+  inherit toplevel
+
+  method dump =
+    "Implement for " ^ tp ^ " {\n" ^ (List.map (fun f -> f#dump) functions |> String.concat "\n") ^ "\n}"
 end;;

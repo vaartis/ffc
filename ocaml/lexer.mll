@@ -16,6 +16,8 @@ rule token = parse
      | ['!' '~' '@' '#' '$' '%' '^' '&' '*' '-' '+' '\\' '/' '<' '>']['!' '~' '@' '#' '$' '%' '^' '&' '*' '-' '+' '\\' '/' '<' '>' '=']*
                                                         { OPERATOR(Lexing.lexeme lexbuf)}
      | "extern" { EXTERN }
+     | "implement" { IMPLEMENT }
+     | "for" { FOR }
      | '\"' ( [^'\"']+ as st ) '\"' { STR(st) }
      | eof { EOF }
      | '(' { OP_P }
