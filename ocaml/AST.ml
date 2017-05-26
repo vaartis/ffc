@@ -42,19 +42,19 @@ class include_ast modules = object(self)
     "Include(" ^ (String.concat ", " modules) ^ ")"
 end;;
 
-class int_ast value = object(self)
+class int_ast value = object
   inherit base_ast
   method dump =
     "Int(" ^ (string_of_int value) ^ ")"
 end;;
 
-class float_ast value = object(self)
+class float_ast value = object
   inherit base_ast
   method dump =
     "Float(" ^ (string_of_float value) ^ ")"
 end;;
 
-class str_ast value = object(self)
+class str_ast value = object
   inherit base_ast
   method dump =
     "Str(" ^ value ^ ")"
@@ -63,12 +63,21 @@ end;;
 class fnc_def_ast name
                   (args : (string * ttype) list)
                   (body : statement list)
-                  ret_t = object(self)
+                  ret_t = object
   inherit toplevel
 
   method dump =
-    let arg_str = List.map (fun x -> let (name, tp) = x in name ^ " " ^ string_of_ttype tp) args in
+    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args in
     let body_str = List.map (fun x -> x#dump) body in
     "FncDef " ^ name ^ "(" ^ (String.concat ", " arg_str) ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^
       (String.concat "\n" body_str) ^ "\n}"
+end;;
+
+class type_def_ast name (fields : (string * ttype) list) = object
+  inherit toplevel
+
+  method dump =
+    let fld_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) fields in
+    "TypeDef " ^ name ^ " {\n" ^ (String.concat ",\n" fld_str) ^ "\n}"
+
 end;;

@@ -10,10 +10,12 @@ rule token = parse
      | ['0' - '9']+ { INT(int_of_string (Lexing.lexeme lexbuf)) }
      | ['0' - '9'] '.' ['0' - '9'] { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
      | "fnc" { FNC }
+     | "type" { TYPE_KW }
      | "include" { INCLUDE }
      | '\"' ( [^'\"']+ as st ) '\"' { STR(st) }
      | eof { EOF }
      | '(' { OP_P }
+     | ',' { COMMA }
      | ')' { CL_P }
      | '{' { OP_CB }
      | '}' { CL_CB }
