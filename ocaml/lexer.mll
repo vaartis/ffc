@@ -20,6 +20,7 @@ rule token = parse
      | "for" { FOR }
      | '\"' ( [^'\"']+ as st ) '\"' { STR(st) }
      | eof { EOF }
+     | '=' { EQ }
      | '(' { OP_P }
      | ',' { COMMA }
      | ')' { CL_P }

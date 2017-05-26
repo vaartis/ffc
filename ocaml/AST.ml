@@ -103,3 +103,13 @@ class implement_ast tp (functions : fnc_def_ast list) = object
   method dump =
     "Implement for " ^ tp ^ " {\n" ^ (List.map (fun f -> f#dump) functions |> String.concat "\n") ^ "\n}"
 end;;
+
+class decl_ast name tp (value : expression option) = object
+  inherit statement
+
+  method dump =
+    let v = match value with
+      | Some x -> " = " ^ x#dump
+      | None -> "" in
+    "Decl (" ^ name ^ ")" ^ v
+end;;

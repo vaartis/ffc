@@ -14,13 +14,14 @@ open AST;;
 %type <AST.extern_ast> extern
 %type <AST.operator_def_ast> operator_def
 %type <AST.implement_ast> impl
+%type <AST.decl_ast> decl
 
 %type <AST.expression> expr
 %type <AST.statement> stmt
 
 %type <string> str
 
-%token FNC INCLUDE SEMICOLON COMMA EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT
+%token FNC INCLUDE SEMICOLON COMMA EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ
 
 %start main
 
@@ -32,7 +33,12 @@ expr:
     | STR { new str_ast $1 }
 
 stmt:
-    expr { $1 }
+    expr SEMICOLON { $1 }
+    | decl SEMICOLON { $1 }
+
+decl:
+    TYPE IDENT EQ expr { new decl_ast $2 (ttype_of_string $1) (Some $4) }
+    | TYPE IDENT { new decl_ast $2 (ttype_of_string $1) None}
 
 str: STR { $1 }
 
