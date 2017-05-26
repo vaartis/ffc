@@ -20,76 +20,35 @@ let ttype_of_string x =
   | "str" -> Str
   | _ -> Void
 
-class virtual base_ast = object
-          method virtual dump : string
-        end;;
 
-class virtual toplevel = object
-          inherit base_ast
-        end;;
+type int_ast = { value: int }
+type float_ast = { value: float }
+type str_ast = { value: string }
+type expression =
+  | Int of int_ast
+  | Float of float_ast
+  | Str of str_ast
 
-class virtual statement = object
-          inherit base_ast
-        end;;
+type decl_ast = { name: string; tp: ttype; value : expression option }
+type statement =
+  | ExprAsStmt of expression
+  | Decl of decl_ast
 
-class virtual expression value tp = object
-          inherit statement (* Expression can also be used as a statement *)
-        end;;
+type include_ast = { modules: string list }
+type fnc_def_ast = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
+type operator_def_ast = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
+type type_def_ast = { name: string; fields : (string * ttype) list }
+type extern_ast = { name: string; args: ttype list }
+type implement_ast = { tp: string; functions : fnc_def_ast list}
+type toplevel =
+  | Include of include_ast
+  | FncDef of fnc_def_ast
+  | OperatorDef of operator_def_ast
+  | TypeDef of type_def_ast
+  | Extern of extern_ast
+  | Implement of implement_ast
 
-class include_ast modules = object(self)
-  inherit toplevel
-  method dump =
-    "Include(" ^ (String.concat ", " modules) ^ ")"
-end;;
-
-class int_ast value = object
-  inherit base_ast
-  method dump =
-    "Int(" ^ (string_of_int value) ^ ")"
-end;;
-
-class float_ast value = object
-  inherit base_ast
-  method dump =
-    "Float(" ^ (string_of_float value) ^ ")"
-end;;
-
-class str_ast value = object
-  inherit base_ast
-  method dump =
-    "Str(" ^ value ^ ")"
-end;;
-
-class fnc_def_ast name
-                  (args : (string * ttype) list)
-                  (body : statement list)
-                  ret_t = object
-  inherit toplevel
-
-  method dump =
-    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args |> String.concat ", " in
-    let body_str = List.map (fun x -> x#dump) body |> String.concat "\n" in
-    "FncDef " ^ name ^ "(" ^ arg_str ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^ body_str ^ "\n}"
-end;;
-
-class operator_def_ast name args body ret_t = object
-  inherit fnc_def_ast name args body ret_t
-
-  method dump =
-    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args |> String.concat ", " in
-    let body_str = List.map (fun x -> x#dump) body |> String.concat "\n" in
-    "OperatorDef " ^ name ^ "(" ^ arg_str ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^ body_str ^ "\n}"
-end;;
-
-class type_def_ast name (fields : (string * ttype) list) = object
-  inherit toplevel
-
-  method dump =
-    let fld_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) fields in
-    "TypeDef " ^ name ^ " {\n" ^ (String.concat ",\n" fld_str) ^ "\n}"
-end;;
-
-class extern_ast name (args : ttype list) = object
+(*class extern_ast name (args : ttype list) = object
   inherit toplevel
 
   method dump =
@@ -113,3 +72,73 @@ class decl_ast name tp (value : expression option) = object
       | None -> "" in
     "Decl (" ^ name ^ ")" ^ v
 end;;
+
+
+class virtual base_ast = object
+          method virtual dump : string
+        end;;
+
+class virtual toplevel = object
+          inherit base_ast
+        end;;
+
+class virtual statement = object
+          inherit base_ast
+        end;;
+
+class virtual expression value tp = object
+          inherit statement (* Expression can also be used as a statement *)
+        end;;*)
+
+(*class operator_def_ast name args body ret_t = object
+  inherit fnc_def_ast name args body ret_t
+
+  method dump =
+    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args |> String.concat ", " in
+    let body_str = List.map (fun x -> x#dump) body |> String.concat "\n" in
+    "OperatorDef " ^ name ^ "(" ^ arg_str ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^ body_str ^ "\n}"
+end;;
+
+class type_def_ast name (fields : (string * ttype) list) = object
+  inherit toplevel
+
+  method dump =
+    let fld_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) fields in
+    "TypeDef " ^ name ^ " {\n" ^ (String.concat ",\n" fld_str) ^ "\n}"
+end;;*)
+
+(*class include_ast modules = object(self)
+  inherit toplevel
+  method dump =
+    "Include(" ^ (String.concat ", " modules) ^ ")"
+end;;*)
+
+(*class int_ast value = object
+  inherit base_ast
+  method dump =
+    "Int(" ^ (string_of_int value) ^ ")"
+end;;*)
+
+(*class float_ast value = object
+  inherit base_ast
+  method dump =
+    "Float(" ^ (string_of_float value) ^ ")"
+end;;
+
+class str_ast value = object
+  inherit base_ast
+  method dump =
+    "Str(" ^ value ^ ")"
+end;;*)
+
+(*class fnc_def_ast name
+                  (args : (string * ttype) list)
+                  (body : statement list)
+                  ret_t = object
+  inherit toplevel
+
+  method dump =
+    let arg_str = List.map (fun x -> let (name, tp) = x in string_of_ttype tp ^ " " ^ name) args |> String.concat ", " in
+    let body_str = List.map (fun x -> x#dump) body |> String.concat "\n" in
+    "FncDef " ^ name ^ "(" ^ arg_str ^ ") " ^ (string_of_ttype ret_t) ^ " {\n" ^ body_str ^ "\n}"
+end;;*)

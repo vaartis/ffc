@@ -28,50 +28,50 @@ open AST;;
 %%
 
 expr:
-    INT { new int_ast $1 }
-    | FLOAT { new float_ast $1 }
-    | STR { new str_ast $1 }
+    INT { Int { value = $1 } }
+    | FLOAT { Float { value = $1 } }
+    | str { Str { value = $1 } }
 
 stmt:
-    expr SEMICOLON { $1 }
-    | decl SEMICOLON { $1 }
+    expr SEMICOLON { ExprAsStmt $1 }
+    | decl SEMICOLON { Decl $1 }
 
 decl:
-    TYPE IDENT EQ expr { new decl_ast $2 (ttype_of_string $1) (Some $4) }
-    | TYPE IDENT { new decl_ast $2 (ttype_of_string $1) None}
+    TYPE IDENT EQ expr { { name = $2; tp = ttype_of_string $1; value = Some $4 } }
+    | TYPE IDENT { { name = $2; tp = ttype_of_string $1; value = None } }
 
 str: STR { $1 }
 
 incl:
-    INCLUDE str+ { new include_ast $2 }
+    INCLUDE str+ { { modules = $2 } }
 
 fnc_def:
     FNC IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE? OP_CB stmt* CL_CB {
-                              new fnc_def_ast $2 (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) $8 (match $6 with
+                              { name = $2; args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (match $6 with
                                                                                                         | None -> Void
-                                                                                                        | Some x -> ttype_of_string x) }
+                                                                                                        | Some x -> ttype_of_string x) } }
 
 operator_def:
     OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE OP_CB stmt* CL_CB {
-                new operator_def_ast $2 (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) $8 (ttype_of_string $6) }
+                { name = $2;  args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(TYPE, IDENT)) CL_CB {
-                              new type_def_ast $2 (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) }
+                               { name = $2; fields = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) } }
 
 extern:
-    EXTERN IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT*)) CL_P { new extern_ast $2 (List.map (fun (x,y) -> ttype_of_string x) $4)}
+    EXTERN IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT*)) CL_P { { name = $2; args = (List.map (fun (x,y) -> ttype_of_string x) $4) } }
 
 impl:
-    IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { new implement_ast $3 $5}
+    IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { tp = $3; functions = $5 } }
 
 top_level:
-    incl { $1 }
-    | impl { $1 }
-    | extern { $1 }
-    | type_def { $1 }
-    | fnc_def { $1 }
-    | operator_def { $1 }
+    incl { Include $1 }
+    | impl { Implement $1 }
+    | extern { Extern $1 }
+    | type_def { TypeDef $1 }
+    | fnc_def { FncDef $1 }
+    | operator_def { OperatorDef $1 }
 
 main:
     top_level+ EOF { $1 }
