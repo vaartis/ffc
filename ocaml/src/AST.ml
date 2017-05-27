@@ -25,9 +25,9 @@ type int_ast = { value: int }
 type float_ast = { value: float }
 type str_ast = { value: string }
 type expression =
-  | Int of int_ast
-  | Float of float_ast
-  | Str of str_ast
+  | IntLit of int_ast
+  | FloatLit of float_ast
+  | StrLit of str_ast
 
 type decl_ast = { name: string; tp: ttype; value : expression option }
 type statement =

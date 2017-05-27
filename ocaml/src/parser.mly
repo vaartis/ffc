@@ -28,9 +28,9 @@ open AST;;
 %%
 
 expr:
-    INT { Int { value = $1 } }
-    | FLOAT { Float { value = $1 } }
-    | str { Str { value = $1 } }
+    INT { IntLit { value = $1 } }
+    | FLOAT { FloatLit { value = $1 } }
+    | str { StrLit { value = $1 } }
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
