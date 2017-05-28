@@ -21,32 +21,53 @@ let ttype_of_string x =
   | _ -> Void
 
 
-type int_ast = { value: int }
-type float_ast = { value: float }
-type str_ast = { value: string }
+module Int = struct
+  type t = { value: int }
+end;;
+module Float = struct
+  type t = { value: float }
+end;;
+module Str = struct
+  type t = { value: string }
+end;;
 type expression =
-  | IntLit of int_ast
-  | FloatLit of float_ast
-  | StrLit of str_ast
+  | IntLit of Int.t
+  | FloatLit of Float.t
+  | StrLit of Str.t
 
-type decl_ast = { name: string; tp: ttype; value : expression option }
+module Decl = struct
+  type t = { name: string; tp: ttype; value : expression option }
+end;;
 type statement =
   | ExprAsStmt of expression
-  | Decl of decl_ast
+  | Decl of Decl.t
 
-type include_ast = { modules: string list }
-type fnc_def_ast = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
-type operator_def_ast = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
-type type_def_ast = { name: string; fields : (string * ttype) list }
-type extern_ast = { name: string; args: ttype list }
-type implement_ast = { tp: string; functions : fnc_def_ast list}
+module Include = struct
+  type t = { modules: string list }
+end;;
+module FncDef = struct
+    type t = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
+end;;
+module OperatorDef = struct
+  type t = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
+end;;
+module TypeDef = struct
+  type t = { name: string; fields : (string * ttype) list }
+end;;
+module Extern = struct
+  type t = { name: string; args: ttype list }
+end;;
+module Implement = struct
+  type t = { tp: string; functions : FncDef.t list}
+end;;
+
 type toplevel =
-  | Include of include_ast
-  | FncDef of fnc_def_ast
-  | OperatorDef of operator_def_ast
-  | TypeDef of type_def_ast
-  | Extern of extern_ast
-  | Implement of implement_ast
+  | Include of Include.t
+  | FncDef of FncDef.t
+  | OperatorDef of OperatorDef.t
+  | TypeDef of TypeDef.t
+  | Extern of Extern.t
+  | Implement of Implement.t
 
 (*class extern_ast name (args : ttype list) = object
   inherit toplevel

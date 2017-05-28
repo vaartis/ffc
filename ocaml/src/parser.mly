@@ -8,13 +8,13 @@ open AST;;
 
 %type <AST.toplevel> top_level
 %type <AST.toplevel list> main
-%type <AST.include_ast> incl
-%type <AST.fnc_def_ast> fnc_def
-%type <AST.type_def_ast> type_def
-%type <AST.extern_ast> extern
-%type <AST.operator_def_ast> operator_def
-%type <AST.implement_ast> impl
-%type <AST.decl_ast> decl
+%type <AST.Include.t> incl
+%type <AST.FncDef.t> fnc_def
+%type <AST.TypeDef.t> type_def
+%type <AST.Extern.t> extern
+%type <AST.OperatorDef.t> operator_def
+%type <AST.Implement.t> impl
+%type <AST.Decl.t> decl
 
 %type <AST.expression> expr
 %type <AST.statement> stmt
@@ -28,42 +28,42 @@ open AST;;
 %%
 
 expr:
-    INT { IntLit { value = $1 } }
-    | FLOAT { FloatLit { value = $1 } }
-    | str { StrLit { value = $1 } }
+    INT { IntLit { Int.value = $1 } }
+    | FLOAT { FloatLit { Float.value = $1 } }
+    | str { StrLit { Str.value = $1 } }
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
     | decl SEMICOLON { Decl $1 }
 
 decl:
-    TYPE IDENT EQ expr { { name = $2; tp = ttype_of_string $1; value = Some $4 } }
-    | TYPE IDENT { { name = $2; tp = ttype_of_string $1; value = None } }
+    TYPE IDENT EQ expr { { Decl.name = $2; tp = ttype_of_string $1; value = Some $4 } }
+    | TYPE IDENT { { Decl.name = $2; tp = ttype_of_string $1; value = None } }
 
 str: STR { $1 }
 
 incl:
-    INCLUDE str+ { { modules = $2 } }
+    INCLUDE str+ { { Include.modules = $2 } }
 
 fnc_def:
     FNC IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE? OP_CB stmt* CL_CB {
-                              { name = $2; args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (match $6 with
+                              { FncDef.name = $2; args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (match $6 with
                                                                                                         | None -> Void
                                                                                                         | Some x -> ttype_of_string x) } }
 
 operator_def:
     OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE OP_CB stmt* CL_CB {
-                { name = $2;  args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
+                { OperatorDef.name = $2;  args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(TYPE, IDENT)) CL_CB {
-                               { name = $2; fields = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) } }
+                               { TypeDef.name = $2; fields = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) } }
 
 extern:
-    EXTERN IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT*)) CL_P { { name = $2; args = (List.map (fun (x,y) -> ttype_of_string x) $4) } }
+    EXTERN IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT*)) CL_P { { Extern.name = $2; args = (List.map (fun (x,y) -> ttype_of_string x) $4) } }
 
 impl:
-    IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { tp = $3; functions = $5 } }
+    IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { Implement.tp = $3; functions = $5 } }
 
 top_level:
     incl { Include $1 }
