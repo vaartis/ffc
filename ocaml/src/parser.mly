@@ -12,7 +12,7 @@ open AST;;
 %type <AST.FncDef.t> fnc_def
 %type <AST.TypeDef.t> type_def
 %type <AST.Extern.t> extern
-%type <AST.OperatorDef.t> operator_def
+%type <AST.FncDef.t> operator_def
 %type <AST.Implement.t> impl
 %type <AST.Decl.t> decl
 
@@ -53,7 +53,7 @@ fnc_def:
 
 operator_def:
     OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE OP_CB stmt* CL_CB {
-                { OperatorDef.name = $2;  args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
+                { FncDef.name = $2;  args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(TYPE, IDENT)) CL_CB {

@@ -44,7 +44,7 @@ let ast = parse () in
                              )) "" x in
       let (tp, name, arg_str, ret_t) = match fn with
       | FncDef { FncDef.name; args; ret_t; _ } -> ("F", name, trav_ar_list args, ret_t)
-      | OperatorDef { OperatorDef.name; args; ret_t; _ } -> ("O", name, trav_ar_list args, ret_t)
+      | OperatorDef { FncDef.name; args; ret_t; _ } -> ("O", name, trav_ar_list args, ret_t)
       | _ -> assert false in
       let ret_s =
         let ltp_s = string_of_lltype @@ get_llvm_type ret_t in
@@ -56,7 +56,12 @@ let ast = parse () in
     let gen_expr ex =
       match ex with
       | IntLit x -> let open AST.Int in
-                    const_int (get_llvm_type Int) x.value in
+                    const_int (get_llvm_type Int) x.value
+      | FloatLit x -> let open AST.Float in
+                      const_float (get_llvm_type Float) x.value
+      | StrLit x -> let open AST.Str in
+                    const_string context x.value
+    in
 
     let gen_stmt st =
       match st with
@@ -68,11 +73,13 @@ let ast = parse () in
           | None -> ()
           end;
           Hashtbl.replace curr_variables x.name alloca;
-        end in
+        end
+      | ExprAsStmt x -> ignore(gen_expr x)
+    in
 
     List.iter (fun node ->
         match node with
-        | FncDef x -> begin
+        | FncDef x | OperatorDef x -> begin
             let open AST.FncDef in
             let m_name = if x.name <> "main" then mangle node else x.name in
             let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.of_list @@ List.map (fun (x,y) -> get_llvm_type y) x.args) in
@@ -82,6 +89,5 @@ let ast = parse () in
             List.iter gen_stmt x.body;
 
             Hashtbl.replace functions m_name fn;
-            dump_module modl;
           end
-    ) ast;;
+    ) ast; dump_module modl;;

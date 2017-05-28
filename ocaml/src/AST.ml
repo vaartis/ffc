@@ -48,9 +48,6 @@ end;;
 module FncDef = struct
     type t = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
 end;;
-module OperatorDef = struct
-  type t = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
-end;;
 module TypeDef = struct
   type t = { name: string; fields : (string * ttype) list }
 end;;
@@ -64,7 +61,7 @@ end;;
 type toplevel =
   | Include of Include.t
   | FncDef of FncDef.t
-  | OperatorDef of OperatorDef.t
+  | OperatorDef of FncDef.t
   | TypeDef of TypeDef.t
   | Extern of Extern.t
   | Implement of Implement.t
