@@ -14,14 +14,16 @@ open AST;;
 %type <AST.Extern.t> extern
 %type <AST.FncDef.t> operator_def
 %type <AST.Implement.t> impl
+
 %type <AST.Decl.t> decl
+%type <AST.Ret.t> ret
 
 %type <AST.expression> expr
 %type <AST.statement> stmt
 
 %type <string> str
 
-%token FNC INCLUDE SEMICOLON COMMA EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ
+%token FNC INCLUDE SEMICOLON COMMA EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ RET
 
 %start main
 
@@ -35,6 +37,11 @@ expr:
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
     | decl SEMICOLON { Decl $1 }
+    | ret SEMICOLON { Ret $1 }
+
+ret:
+    RET expr { { Ret.value = Some $2 } }
+    | RET { { Ret.value = None } }
 
 decl:
     TYPE IDENT EQ expr { { Decl.name = $2; tp = ttype_of_string $1; value = Some $4 } }

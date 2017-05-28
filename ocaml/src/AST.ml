@@ -38,9 +38,13 @@ type expression =
 module Decl = struct
   type t = { name: string; tp: ttype; value : expression option }
 end;;
+module Ret = struct
+  type t = { value: expression option }
+end;;
 type statement =
   | ExprAsStmt of expression
   | Decl of Decl.t
+  | Ret of Ret.t
 
 module Include = struct
   type t = { modules: string list }

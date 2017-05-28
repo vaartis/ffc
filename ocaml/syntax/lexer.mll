@@ -18,6 +18,7 @@ rule token = parse
      | "extern" { EXTERN }
      | "implement" { IMPLEMENT }
      | "for" { FOR }
+     | "ret" { RET }
      | '\"' ( [^'\"']+ as st ) '\"' { STR(st) }
      | eof { EOF }
      | '=' { EQ }
