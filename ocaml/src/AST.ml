@@ -30,10 +30,14 @@ end;;
 module Str = struct
   type t = { value: string }
 end;;
+module Ident = struct
+  type t = { value: string }
+end;;
 type expression =
   | IntLit of Int.t
   | FloatLit of Float.t
   | StrLit of Str.t
+  | Ident of Ident.t
 
 module Decl = struct
   type t = { name: string; tp: ttype; value : expression option }

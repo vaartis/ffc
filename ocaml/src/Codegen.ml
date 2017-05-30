@@ -5,6 +5,11 @@ module BuiltFnc = struct
   type t = { fnc: llvalue; ret_value: llvalue option; ret_block: llbasicblock };;
 end;;
 
+module DefinedVar = struct
+  type t = { tp: ttype; instance: llvalue }
+end;;
+
+
 let codegen ast =
   let context = global_context () in
   let modl = create_module context "stdin" in
@@ -60,18 +65,39 @@ let codegen ast =
                     const_float (get_llvm_type Float) x.value
     | StrLit x -> let open AST.Str in
                   const_string context x.value
+    | Ident x -> let open AST.Ident in
+                 try
+                   let var = Hashtbl.find curr_variables x.value in
+                   build_load var.DefinedVar.instance "" builder
+                 with Not_found ->
+                   failwith ("Undefined variable: " ^ x.value)
   in
+
+  let expr_type ex =
+    match ex with
+    | IntLit x ->  Int
+    | FloatLit x ->  Float
+    | StrLit x ->  Str
+    | Ident x -> (Hashtbl.find curr_variables x.value).DefinedVar.tp in
 
   let gen_stmt st =
     match st with
     | Decl x -> begin
         let open AST.Decl in
         let alloca = build_alloca (get_llvm_type x.tp) x.name builder in
+
         begin match x.value with
-        | Some v -> ignore(build_store (gen_expr v) alloca builder)
+        | Some v -> begin
+            let vtp = expr_type v
+            and atp = x.tp in
+            if vtp <> x.tp then
+              failwith @@ Printf.sprintf "Wrong type of expression for `%s`, expected %s, but got %s" x.name (string_of_ttype atp) (string_of_ttype vtp)
+            else
+              ignore(build_store (gen_expr v) alloca builder)
+          end
         | None -> ()
         end;
-        Hashtbl.replace curr_variables x.name alloca;
+        Hashtbl.replace curr_variables x.name { DefinedVar.instance = alloca; tp = x.tp };
       end
     | ExprAsStmt x -> ignore(gen_expr x)
     | Ret x -> begin

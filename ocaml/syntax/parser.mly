@@ -33,6 +33,7 @@ expr:
     INT { IntLit { Int.value = $1 } }
     | FLOAT { FloatLit { Float.value = $1 } }
     | str { StrLit { Str.value = $1 } }
+    | IDENT { Ident { Ident.value = $1 } }
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
