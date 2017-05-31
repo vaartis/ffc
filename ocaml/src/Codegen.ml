@@ -41,18 +41,18 @@ let codegen ast =
   and mangle_type_name ltp = match (classify_type ltp) with
     | Llvm.TypeKind.Struct -> begin
         match struct_name ltp with
-        | Some nm -> (string_of_int @@ String.length nm) ^ nm
+        | Some nm -> Printf.sprintf "%i%s" (String.length nm) nm
         | None -> assert false
       end
     | _ -> begin
         let ltp_s = string_of_lltype ltp in
-        (string_of_int @@ String.length ltp_s) ^ ltp_s
+        Printf.sprintf "%i%s" (String.length ltp_s) ltp_s
       end
 
   and mangle fn =
     let trav_ar_list x = List.fold_left (fun acc (_, tp) ->
                              let ltp = get_llvm_type tp in
-                             acc ^ "A" ^ mangle_type_name ltp) "" x in
+                             Printf.sprintf "%sA%s" acc (mangle_type_name ltp)) "" x in
 
     let (name, arg_str, ret_t) = match fn with
       | FncDef { FncDef.name; args; ret_t; _ } | OperatorDef { FncDef.name; args; ret_t; _ } -> (name, trav_ar_list args, ret_t)
@@ -61,11 +61,9 @@ let codegen ast =
 
     let ret_s =
       let ltp_s = string_of_lltype @@ get_llvm_type ret_t in
-      "R" ^ (string_of_int @@ String.length ltp_s) ^ ltp_s
+      Printf.sprintf "R%i%s" (String.length ltp_s) ltp_s
     in
-
-    "_FF" ^ (* TODO: types*)"" ^
-      "N" ^ (string_of_int @@ String.length name) ^ name ^ arg_str ^ ret_s
+    Printf.sprintf "_FFN%i%s%s%s" (String.length name) name arg_str ret_s
 
   and mangle_call ca =
     let name = ca.FncCall.name in
@@ -73,15 +71,21 @@ let codegen ast =
       let ar_types = List.map expr_type ca.args in
       List.fold_left (fun acc tp ->
           let ltp = get_llvm_type tp in
-          acc ^ "A" ^ mangle_type_name ltp) "" ar_types
+          Printf.sprintf "%sA%s" acc (mangle_type_name ltp)) "" ar_types
     in
     let ret_s =
       let s = (string_of_lltype @@ get_llvm_type @@ expr_type @@ FncCall ca) in
-      "R" ^ (string_of_int @@ String.length s) ^ s
+      Printf.sprintf "R%i%s" (String.length s) s
     in
-    "_FF" ^ "" ^ "N" ^ (string_of_int @@ String.length name) ^ name ^ ar_str ^ ret_s
+    Printf.sprintf "_FFN%i%s%s%s" (String.length name) name ar_str ret_s
   in
 
+  let string_of_fnc_call f =
+    let ar_l = List.map (fun x -> string_of_ttype @@ expr_type x) f.FncCall.args in
+    let ar_s = String.concat ", " ar_l in
+    let ret_s = string_of_ttype @@ expr_type @@ FncCall f in
+    Printf.sprintf "%s(%s) %s" f.name ar_s ret_s
+  in
 
   let rec gen_expr ex =
     let open AST.Expression in
@@ -98,7 +102,7 @@ let codegen ast =
           let var = Hashtbl.find curr_variables x.value in
           build_load var.DefinedVar.instance "" builder
         with Not_found ->
-          failwith ("Undefined variable: " ^ x.value)
+          failwith (Printf.sprintf "Undefined variable: %s" x.value)
       end
     | FncCall x -> let open AST.FncCall in
                    try
@@ -106,7 +110,7 @@ let codegen ast =
                      let args = Array.of_list @@ List.map gen_expr x.args in
                      build_call f.BuiltFnc.fnc args x.name builder
                    with Not_found ->
-                     failwith ("Undefined function: " ^ x.name)
+                     failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
   in
 
   let gen_stmt st =

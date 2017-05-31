@@ -83,4 +83,4 @@ type toplevel =
   | OperatorDef of FncDef.t
   | TypeDef of TypeDef.t
   | Extern of Extern.t
-  | Implement of Implement.t
+  | Implement of Implement.t;;
