@@ -65,7 +65,7 @@ module Include = struct
   type t = { modules: string list }
 end;;
 module FncDef = struct
-    type t = { name: string; args: (string * ttype) list; body: statement list; ret_t: ttype }
+    type t = { name: string; args: (string * ttype) array; body: statement list; ret_t: ttype }
 end;;
 module TypeDef = struct
   type t = { name: string; fields : (string * ttype) list }

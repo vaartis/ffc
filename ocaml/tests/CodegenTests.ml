@@ -14,6 +14,15 @@ let codegen_tests =
           "Load from variable" >:: (fun ctxt -> let ast = ParserHelpers.parse_str "fnc main() int { int x = 11; int y = x; ret y; }" in
                                                 let code = Codegen.codegen ast in
                                                 let st = string_of_llmodule code in
-                                                assert_command ~exit_code:(Unix.WEXITED 11) ~sinput:(Stream.of_string st) ~ctxt "lli" [])
+                                                assert_command ~exit_code:(Unix.WEXITED 11) ~sinput:(Stream.of_string st) ~ctxt "lli" []
+                                   )
+        ];
+      "Expressions" >:::
+        [
+          "Function call" >:: (fun ctxt -> let ast = ParserHelpers.parse_str "fnc test(int x) int { ret x; } fnc main() int { ret test(12); }" in
+                                           let code = Codegen.codegen ast in
+                                           let st = string_of_llmodule code in
+                                           assert_command ~exit_code:(Unix.WEXITED 12) ~sinput:(Stream.of_string st) ~ctxt "lli" []
+          )
         ]
     ]

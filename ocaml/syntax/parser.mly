@@ -57,13 +57,13 @@ incl:
 
 fnc_def:
     FNC IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE? OP_CB stmt* CL_CB {
-                              { FncDef.name = $2; args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (match $6 with
+                              { FncDef.name = $2; args = Array.of_list (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (match $6 with
                                                                                                         | None -> Void
                                                                                                         | Some x -> ttype_of_string x) } }
 
 operator_def:
     OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE OP_CB stmt* CL_CB {
-                { FncDef.name = $2;  args = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
+                { FncDef.name = $2;  args = Array.of_list (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(TYPE, IDENT)) CL_CB {

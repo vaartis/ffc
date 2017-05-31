@@ -50,12 +50,12 @@ let codegen ast =
       end
 
   and mangle fn =
-    let trav_ar_list x = List.fold_left (fun acc (_, tp) ->
+    let trav_ar_arr x = Array.fold_left (fun acc (_, tp) ->
                              let ltp = get_llvm_type tp in
                              Printf.sprintf "%sA%s" acc (mangle_type_name ltp)) "" x in
 
     let (name, arg_str, ret_t) = match fn with
-      | FncDef { FncDef.name; args; ret_t; _ } | OperatorDef { FncDef.name; args; ret_t; _ } -> (name, trav_ar_list args, ret_t)
+      | FncDef { FncDef.name; args; ret_t; _ } | OperatorDef { FncDef.name; args; ret_t; _ } -> (name, trav_ar_arr args, ret_t)
       | _ -> assert false
     in
 
@@ -150,12 +150,13 @@ let codegen ast =
   in
 
   List.iter (fun node ->
+      Hashtbl.reset curr_variables;
       match node with
       | FncDef x | OperatorDef x -> begin
           let open AST.FncDef in
           let m_name = if x.name <> "main" then mangle node else x.name in
           curr_fn_name := m_name;
-          let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.of_list @@ List.map (fun (x,y) -> get_llvm_type y) x.args) in
+          let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.map (fun (x,y) -> get_llvm_type y) x.args) in
           let fnc = define_function m_name ftype modl in
           position_at_end (entry_block fnc) builder;
 
@@ -172,6 +173,15 @@ let codegen ast =
           position_at_end (entry_block fnc) builder;
 
           position_at_end (entry_block fnc) builder;
+
+          (* Make variables from arguments *)
+
+          Array.iteri (fun i par ->
+              let r_param = Array.get x.args i in
+              let p = build_alloca (type_of par) (fst r_param) builder in
+              ignore(build_store par p builder);
+              Hashtbl.replace curr_variables (fst r_param) { DefinedVar.tp = snd r_param; instance = p };
+            ) (params fnc);
 
           Hashtbl.replace functions m_name { BuiltFnc.fnc; ret_value; ret_block; fnc_def = x };
           List.iter gen_stmt x.body;
