@@ -1,5 +1,6 @@
 %{
 open AST;;
+open AST.Expression;;
 %}
 
 %token <int> INT
@@ -15,10 +16,10 @@ open AST;;
 %type <AST.FncDef.t> operator_def
 %type <AST.Implement.t> impl
 
+%type <AST.Expression.t> expr
+
 %type <AST.Decl.t> decl
 %type <AST.Ret.t> ret
-
-%type <AST.expression> expr
 %type <AST.statement> stmt
 
 %type <string> str
@@ -33,6 +34,7 @@ expr:
     INT { IntLit { Int.value = $1 } }
     | FLOAT { FloatLit { Float.value = $1 } }
     | str { StrLit { Str.value = $1 } }
+    | IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $1; args = $3 } }
     | IDENT { Ident { Ident.value = $1 } }
 
 stmt:

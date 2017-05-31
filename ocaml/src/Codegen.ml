@@ -2,7 +2,7 @@ open Llvm;;
 open AST;;
 
 module BuiltFnc = struct
-  type t = { fnc: llvalue; ret_value: llvalue option; ret_block: llbasicblock };;
+  type t = { fnc: llvalue; ret_value: llvalue option; ret_block: llbasicblock; fnc_def: FncDef.t }
 end;;
 
 module DefinedVar = struct
@@ -24,40 +24,67 @@ let codegen ast =
     | Int -> i32_type context
     | Float -> float_type context
     | Str -> pointer_type @@ i8_type context
-    | Void -> void_type context in
+    | Void -> void_type context
+  in
 
-  let mangle fn =
+  let rec expr_type ex =
+    let open Expression in
+    match ex with
+    | IntLit x ->  Int
+    | FloatLit x ->  Float
+    | StrLit x ->  Str
+    | Ident x -> let open AST.Ident in
+                 (Hashtbl.find curr_variables x.value).DefinedVar.tp
+    | FncCall x -> let open AST.FncCall in
+                   (Hashtbl.find functions !curr_fn_name).BuiltFnc.fnc_def.ret_t
+
+  and mangle_type_name ltp = match (classify_type ltp) with
+    | Llvm.TypeKind.Struct -> begin
+        match struct_name ltp with
+        | Some nm -> (string_of_int @@ String.length nm) ^ nm
+        | None -> assert false
+      end
+    | _ -> begin
+        let ltp_s = string_of_lltype ltp in
+        (string_of_int @@ String.length ltp_s) ^ ltp_s
+      end
+
+  and mangle fn =
     let trav_ar_list x = List.fold_left (fun acc (_, tp) ->
                              let ltp = get_llvm_type tp in
-                             acc ^ "A" ^ (match (classify_type ltp) with
-                                          | Llvm.TypeKind.Struct -> begin
-                                              match struct_name ltp with
-                                              | Some nm -> (string_of_int @@ String.length nm) ^ nm
-                                              | None -> assert false
-                                            end
-                                          | _ -> begin
-                                              let ltp_s = string_of_lltype ltp in
-                                              (string_of_int @@ String.length ltp_s) ^ ltp_s
-                                            end
-                           )) "" x in
+                             acc ^ "A" ^ mangle_type_name ltp) "" x in
 
     let (name, arg_str, ret_t) = match fn with
       | FncDef { FncDef.name; args; ret_t; _ } | OperatorDef { FncDef.name; args; ret_t; _ } -> (name, trav_ar_list args, ret_t)
-      | _ -> assert false in
-
-    let tp = match fn with
-      | FncDef _ -> "F"
-      | OperatorDef _ -> "O"
-      | _ -> assert false in
+      | _ -> assert false
+    in
 
     let ret_s =
       let ltp_s = string_of_lltype @@ get_llvm_type ret_t in
-      "R" ^ (string_of_int @@ String.length ltp_s) ^ ltp_s in
+      "R" ^ (string_of_int @@ String.length ltp_s) ^ ltp_s
+    in
 
-    "_FF" ^ tp ^ (* TODO: types*)"" ^
-      "N" ^ (string_of_int @@ String.length name) ^ name ^ arg_str ^ ret_s in
+    "_FF" ^ (* TODO: types*)"" ^
+      "N" ^ (string_of_int @@ String.length name) ^ name ^ arg_str ^ ret_s
 
-  let gen_expr ex =
+  and mangle_call ca =
+    let name = ca.FncCall.name in
+    let ar_str =
+      let ar_types = List.map expr_type ca.args in
+      List.fold_left (fun acc tp ->
+          let ltp = get_llvm_type tp in
+          acc ^ "A" ^ mangle_type_name ltp) "" ar_types
+    in
+    let ret_s =
+      let s = (string_of_lltype @@ get_llvm_type @@ expr_type @@ FncCall ca) in
+      "R" ^ (string_of_int @@ String.length s) ^ s
+    in
+    "_FF" ^ "" ^ "N" ^ (string_of_int @@ String.length name) ^ name ^ ar_str ^ ret_s
+  in
+
+
+  let rec gen_expr ex =
+    let open AST.Expression in
     match ex with
     | IntLit x -> let open AST.Int in
                   const_int (get_llvm_type Int) x.value
@@ -65,20 +92,22 @@ let codegen ast =
                     const_float (get_llvm_type Float) x.value
     | StrLit x -> let open AST.Str in
                   const_string context x.value
-    | Ident x -> let open AST.Ident in
-                 try
-                   let var = Hashtbl.find curr_variables x.value in
-                   build_load var.DefinedVar.instance "" builder
-                 with Not_found ->
-                   failwith ("Undefined variable: " ^ x.value)
+    | Ident x -> begin
+        let open AST.Ident in
+        try
+          let var = Hashtbl.find curr_variables x.value in
+          build_load var.DefinedVar.instance "" builder
+        with Not_found ->
+          failwith ("Undefined variable: " ^ x.value)
+      end
+    | FncCall x -> let open AST.FncCall in
+                   try
+                     let f = Hashtbl.find functions (mangle_call x) in
+                     let args = Array.of_list @@ List.map gen_expr x.args in
+                     build_call f.BuiltFnc.fnc args x.name builder
+                   with Not_found ->
+                     failwith ("Undefined function: " ^ x.name)
   in
-
-  let expr_type ex =
-    match ex with
-    | IntLit x ->  Int
-    | FloatLit x ->  Float
-    | StrLit x ->  Str
-    | Ident x -> (Hashtbl.find curr_variables x.value).DefinedVar.tp in
 
   let gen_stmt st =
     match st with
@@ -101,6 +130,7 @@ let codegen ast =
       end
     | ExprAsStmt x -> ignore(gen_expr x)
     | Ret x -> begin
+        let open AST.Ret in
         let f = Hashtbl.find functions !curr_fn_name in
         begin
           match x.value with
@@ -128,7 +158,7 @@ let codegen ast =
           let ret_block = append_block context "exit" fnc in
           let ret_value = match x.FncDef.ret_t with
             | Void -> position_at_end ret_block builder;
-                      build_ret_void builder;
+                      ignore(build_ret_void builder);
                       None
             | va ->
                let r = build_alloca (get_llvm_type va) "ret_val" builder in
@@ -139,7 +169,7 @@ let codegen ast =
 
           position_at_end (entry_block fnc) builder;
 
-          Hashtbl.replace functions m_name { BuiltFnc.fnc; ret_value; ret_block };
+          Hashtbl.replace functions m_name { BuiltFnc.fnc; ret_value; ret_block; fnc_def = x };
           List.iter gen_stmt x.body;
         end
     ) ast; modl;;
