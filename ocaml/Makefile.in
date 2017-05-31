@@ -1,5 +1,5 @@
 OCB_FLAGS = -use-ocamlfind -use-menhir -Is syntax,src
-OCB = ocamlbuild ${OCB_FLAGS}
+OCB = @OCAMLBUILD@ ${OCB_FLAGS}
 
 all:
 	${OCB} main.byte
@@ -9,3 +9,4 @@ test:
 
 clean:
 	${OCB} -clean
+	rm -rf config.* configure autom4te.cache

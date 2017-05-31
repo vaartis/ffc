@@ -3,4 +3,6 @@
 *.o
 lexer.ml
 parser.ml
-main
+main.*
+Makefile
+configure
