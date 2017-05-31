@@ -2,7 +2,7 @@ OCB_FLAGS = -use-ocamlfind -use-menhir -Is syntax,src
 OCB = ocamlbuild ${OCB_FLAGS}
 
 all:
-	${OCB} main.native
+	${OCB} main.byte
 
 test:
 	${OCB} -I tests -pkg oUnit run_tests.native

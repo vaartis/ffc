@@ -1,1 +1,1 @@
-true: package(llvm)
+true: package(llvm), debug
