@@ -114,6 +114,7 @@ let codegen ast =
   in
 
   let gen_stmt st =
+    let open AST.Statement in
     match st with
     | Decl x -> begin
         let open AST.Decl in
@@ -147,6 +148,17 @@ let codegen ast =
         end;
         ignore(build_br f.BuiltFnc.ret_block builder)
       end
+    | Assign x -> let open AST.Assign in
+                  try
+                    let v = Hashtbl.find curr_variables x.Assign.name in
+                    if v.tp <> (expr_type x.value) then
+                      failwith (Printf.sprintf
+                                  "Wrong type assigned to `%s`, expected %s, but got %s"
+                                  x.name (string_of_ttype v.tp) (string_of_ttype @@ expr_type x.value))
+                    else
+                      ignore(build_store (gen_expr x.value) v.instance builder)
+                  with Not_found ->
+                    failwith (Printf.sprintf "Undefined variable: %s" x.name)
   in
 
   List.iter (fun node ->

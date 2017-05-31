@@ -1,6 +1,7 @@
 %{
 open AST;;
 open AST.Expression;;
+open AST.Statement;;
 %}
 
 %token <int> INT
@@ -20,7 +21,7 @@ open AST.Expression;;
 
 %type <AST.Decl.t> decl
 %type <AST.Ret.t> ret
-%type <AST.statement> stmt
+%type <AST.Statement.t> stmt
 
 %type <string> str
 
@@ -39,8 +40,12 @@ expr:
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
+    | assign SEMICOLON { Assign $1 }
     | decl SEMICOLON { Decl $1 }
     | ret SEMICOLON { Ret $1 }
+
+assign:
+    IDENT EQ expr { { Assign.name = $1; value = $3 } }
 
 ret:
     RET expr { { Ret.value = Some $2 } }

@@ -50,22 +50,32 @@ end = Expression
      type t = { name: string; args: Expression.t list }
    end = FncCall
 
-module Decl = struct
-  type t = { name: string; tp: ttype; value : Expression.t option }
-end;;
-module Ret = struct
-  type t = { value: Expression.t option }
-end;;
-type statement =
-  | ExprAsStmt of Expression.t
-  | Decl of Decl.t
-  | Ret of Ret.t
+
+   and Statement : sig
+     type t =
+       | ExprAsStmt of Expression.t
+       | Decl of Decl.t
+       | Ret of Ret.t
+       | Assign of Assign.t
+   end = Statement
+
+   and Decl : sig
+     type t = { name: string; tp: ttype; value : Expression.t option }
+   end = Decl
+
+   and Ret : sig
+     type t = { value: Expression.t option }
+   end = Ret
+
+   and Assign : sig
+     type t = { name: string; value: Expression.t }
+   end = Assign
 
 module Include = struct
   type t = { modules: string list }
 end;;
 module FncDef = struct
-    type t = { name: string; args: (string * ttype) array; body: statement list; ret_t: ttype }
+    type t = { name: string; args: (string * ttype) array; body: Statement.t list; ret_t: ttype }
 end;;
 module TypeDef = struct
   type t = { name: string; fields : (string * ttype) list }
