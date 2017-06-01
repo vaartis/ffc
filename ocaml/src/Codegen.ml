@@ -156,6 +156,12 @@ let codegen ast =
           failwith (Printf.sprintf "Undefined custom type: %s" t_l.name)
       end
     | TypeFieldLoad x -> begin
+        begin
+          match expr_type x.TypeFieldLoad.from with
+          | Custom _ -> ()
+          | t -> failwith @@ Printf.sprintf "Cannot load field %s from non-custom type %s" x.field_name (string_of_ttype t)
+        end;
+
         let tt_name = (string_of_ttype @@ expr_type x.TypeFieldLoad.from) in
         let tp = Hashtbl.find types tt_name in
 
