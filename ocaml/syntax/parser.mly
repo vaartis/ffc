@@ -50,13 +50,14 @@ expr:
     | IDENT { Ident { Ident.value = $1 } }
     | custom_tp OP_CB separated_list(COMMA, separated_pair(IDENT, EQ, expr)) CL_CB { TypeLit { TypeLit.name = (string_of_ttype $1); fields = $3 } }
     | expr DOT IDENT { TypeFieldLoad { TypeFieldLoad.from = $1; field_name = $3 } }
+    | expr OPERATOR expr { FncCall { FncCall.name = $2; args = [$1;$3] } }
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
+    | type_field_assign SEMICOLON { TypeFieldAssign $1 }
     | assign SEMICOLON { Assign $1 }
     | decl SEMICOLON { Decl $1 }
     | ret SEMICOLON { Ret $1 }
-    | type_field_assign SEMICOLON { TypeFieldAssign $1 }
 
 assign:
     IDENT EQ expr { { Assign.name = $1; value = $3 } }

@@ -1,1 +1,1 @@
-true: package(llvm), debug
+true: package(llvm), debug, use_menhir, explain
