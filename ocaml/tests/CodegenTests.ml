@@ -49,6 +49,12 @@ let codegen_tests =
             assert_command
               ~exit_code:(Unix.WEXITED 15)
               ~sinput:(Stream.of_string @@ create_mod "type T { int x, int y } fnc main() int { ret T{ x = 1, y = 15}.y; }") ~ctxt "lli" []
-          )
+          );
+
+          "Operator usage" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 16)
+              ~sinput:(Stream.of_string @@ create_mod "operator ++(int x, int y) int { ret x + y + 1; } fnc main() int { ret 8 ++ 7; } ") ~ctxt "lli" []
+          );
         ]
     ]
