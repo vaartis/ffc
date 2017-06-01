@@ -32,6 +32,11 @@ let codegen_tests =
             assert_command
               ~exit_code:(Unix.WEXITED 12)
               ~sinput:(Stream.of_string @@ create_mod "fnc test(int x) int { ret x; } fnc main() int { ret test(12); }") ~ctxt "lli" []
-          )
+          );
+
+          "Type literal and field load" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 14)
+              ~sinput:(Stream.of_string @@ create_mod "type T { int x, int y } fnc main() int { T x = T{ x = 14, y = 0}; ret x.x; }") ~ctxt "lli" [])
         ]
     ]
