@@ -1,4 +1,4 @@
-OCB_FLAGS = -use-ocamlfind -use-menhir -Is syntax,src
+OCB_FLAGS = -use-ocamlfind -use-menhir -Is syntax,src -cflags "-w -40"
 OCB = @OCAMLBUILD@ ${OCB_FLAGS}
 
 all:

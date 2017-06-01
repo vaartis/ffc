@@ -82,6 +82,7 @@ let codegen ast =
       let ltp_s = string_of_lltype @@ get_llvm_type ret_t in
       Printf.sprintf "R%i%s" (String.length ltp_s) ltp_s
     in
+
     Printf.sprintf "_FFN%i%s%s%s" (String.length name) name arg_str ret_s
 
   and mangle_call ca =
@@ -96,7 +97,14 @@ let codegen ast =
       let s = (string_of_lltype @@ get_llvm_type @@ expr_type @@ FncCall ca) in
       Printf.sprintf "R%i%s" (String.length s) s
     in
-    Printf.sprintf "_FFN%i%s%s%s" (String.length name) name ar_str ret_s
+
+    let from_tp = match ca.from_tp with
+      | Some x -> let tp = string_of_ttype @@ expr_type x in
+                  Printf.sprintf "T%i%s" (String.length tp) tp
+      | None -> ""
+    in
+
+    Printf.sprintf "_FF%sN%i%s%s%s" from_tp (String.length name) name ar_str ret_s
   in
 
   let string_of_fnc_call f =

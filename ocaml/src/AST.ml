@@ -49,7 +49,7 @@ end = Expression
    end = Ident
 
    and FncCall : sig
-     type t = { name: string; args: Expression.t list }
+     type t = { name: string; args: Expression.t list; from_tp: Expression.t option }
    end = FncCall
 
    and TypeLit : sig
