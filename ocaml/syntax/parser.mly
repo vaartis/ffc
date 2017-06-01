@@ -2,6 +2,8 @@
 open AST;;
 open AST.Expression;;
 open AST.Statement;;
+
+let types = Hashtbl.create 0;;
 %}
 
 %token <int> INT
@@ -16,6 +18,7 @@ open AST.Statement;;
 %type <AST.Extern.t> extern
 %type <AST.FncDef.t> operator_def
 %type <AST.Implement.t> impl
+%type <AST.ttype> tp custom_tp
 
 %type <AST.Expression.t> expr
 
@@ -25,11 +28,18 @@ open AST.Statement;;
 
 %type <string> str
 
-%token FNC INCLUDE SEMICOLON COMMA EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ RET
+%token FNC INCLUDE SEMICOLON COMMA DOT EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ RET
 
 %start main
 
 %%
+
+custom_tp:
+    IDENT { try ignore(Hashtbl.find types $1); Custom $1 with Not_found -> failwith (Printf.sprintf "Unknown type: %s" $1) }
+
+tp:
+    TYPE { ttype_of_string $1 }
+    | custom_tp { $1 }
 
 expr:
     INT { IntLit { Int.value = $1 } }
@@ -37,6 +47,8 @@ expr:
     | str { StrLit { Str.value = $1 } }
     | IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $1; args = $3 } }
     | IDENT { Ident { Ident.value = $1 } }
+    | custom_tp OP_CB separated_list(COMMA, separated_pair(IDENT, EQ, expr)) CL_CB { TypeLit { TypeLit.name = (string_of_ttype $1); fields = $3 } }
+    | expr DOT IDENT { TypeFieldLoad { TypeFieldLoad.from = $1; field_name = $3 } }
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
@@ -52,8 +64,8 @@ ret:
     | RET { { Ret.value = None } }
 
 decl:
-    TYPE IDENT EQ expr { { Decl.name = $2; tp = ttype_of_string $1; value = Some $4 } }
-    | TYPE IDENT { { Decl.name = $2; tp = ttype_of_string $1; value = None } }
+    tp IDENT EQ expr { { Decl.name = $2; tp = $1; value = Some $4 } }
+    | tp IDENT { { Decl.name = $2; tp = $1; value = None } }
 
 str: STR { $1 }
 
@@ -61,21 +73,22 @@ incl:
     INCLUDE str+ { { Include.modules = $2 } }
 
 fnc_def:
-    FNC IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE? OP_CB stmt* CL_CB {
-                              { FncDef.name = $2; args = Array.of_list (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (match $6 with
+    FNC IDENT OP_P separated_list(COMMA, pair(tp, IDENT)) CL_P tp? OP_CB stmt* CL_CB {
+                              { FncDef.name = $2; args = Array.of_list (List.map (fun (x,y) -> (y, x)) $4); body = $8; ret_t = (match $6 with
                                                                                                         | None -> Void
-                                                                                                        | Some x -> ttype_of_string x) } }
+                                                                                                        | Some x -> x) } }
 
 operator_def:
-    OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(TYPE, IDENT)) CL_P TYPE OP_CB stmt* CL_CB {
-                { FncDef.name = $2;  args = Array.of_list (List.map (fun (x,y) -> (y, ttype_of_string x)) $4); body = $8; ret_t = (ttype_of_string $6) } }
+    OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(tp, IDENT)) CL_P tp OP_CB stmt* CL_CB {
+                { FncDef.name = $2;  args = Array.of_list (List.map (fun (x,y) -> (y, x)) $4); body = $8; ret_t = ($6) } }
 
 type_def:
-    TYPE_KW IDENT OP_CB separated_list(COMMA, pair(TYPE, IDENT)) CL_CB {
-                               { TypeDef.name = $2; fields = (List.map (fun (x,y) -> (y, ttype_of_string x)) $4) } }
+    TYPE_KW IDENT OP_CB separated_list(COMMA, pair(tp, IDENT)) CL_CB {
+                               Hashtbl.replace types $2 ();
+                               { TypeDef.name = $2; fields = (List.map (fun (x,y) -> (y, x)) $4) } }
 
 extern:
-    EXTERN IDENT OP_P separated_list(COMMA, pair(TYPE, IDENT*)) CL_P { { Extern.name = $2; args = (List.map (fun (x,y) -> ttype_of_string x) $4) } }
+    EXTERN IDENT OP_P separated_list(COMMA, pair(tp, IDENT*)) CL_P { { Extern.name = $2; args = (List.map (fun (x,y) -> x) $4) } }
 
 impl:
     IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { Implement.tp = $3; functions = $5 } }

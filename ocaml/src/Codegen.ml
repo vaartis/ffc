@@ -5,10 +5,19 @@ module BuiltFnc = struct
   type t = { fnc: llvalue; ret_value: llvalue option; ret_block: llbasicblock; fnc_def: FncDef.t }
 end;;
 
+module BuiltType = struct
+  type t = { tp: ttype; ltp: lltype; fields: (string * ttype) list}
+end;;
+
 module DefinedVar = struct
   type t = { tp: ttype; instance: llvalue }
 end;;
 
+(* SO question #31279920 *)
+let rec list_index x lst =
+    match lst with
+    | [] -> raise Not_found
+    | h :: t -> if x = h then 0 else 1 + list_index x t
 
 let codegen ast =
   let context = global_context () in
@@ -17,6 +26,7 @@ let codegen ast =
 
   let functions = Hashtbl.create 1 in
   let curr_variables = Hashtbl.create 0 in
+  let types = Hashtbl.create 0 in
   let curr_fn_name = ref "" in
 
   let get_llvm_type tp =
@@ -25,6 +35,11 @@ let codegen ast =
     | Float -> float_type context
     | Str -> pointer_type @@ i8_type context
     | Void -> void_type context
+    | Custom x ->
+       try
+         (Hashtbl.find types x).BuiltType.ltp
+       with Not_found ->
+         failwith (Printf.sprintf "Undefined cystom type: %s" x)
   in
 
   let rec expr_type ex =
@@ -37,6 +52,10 @@ let codegen ast =
                  (Hashtbl.find curr_variables x.value).DefinedVar.tp
     | FncCall x -> let open AST.FncCall in
                    (Hashtbl.find functions !curr_fn_name).BuiltFnc.fnc_def.ret_t
+    | TypeLit x -> let open AST.TypeLit in
+                   (Hashtbl.find types x.name).BuiltType.tp
+    | TypeFieldLoad x -> let open AST.TypeFieldLoad in
+                         List.assoc x.TypeFieldLoad.field_name (Hashtbl.find types (string_of_ttype (expr_type x.from))).BuiltType.fields
 
   and mangle_type_name ltp = match (classify_type ltp) with
     | Llvm.TypeKind.Struct -> begin
@@ -104,13 +123,52 @@ let codegen ast =
         with Not_found ->
           failwith (Printf.sprintf "Undefined variable: %s" x.value)
       end
-    | FncCall x -> let open AST.FncCall in
-                   try
-                     let f = Hashtbl.find functions (mangle_call x) in
-                     let args = Array.of_list @@ List.map gen_expr x.args in
-                     build_call f.BuiltFnc.fnc args x.name builder
-                   with Not_found ->
-                     failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
+    | FncCall x -> begin
+        let open AST.FncCall in
+        try
+          let f = Hashtbl.find functions (mangle_call x) in
+          let args = Array.of_list @@ List.map gen_expr x.args in
+          build_call f.BuiltFnc.fnc args x.name builder
+        with Not_found ->
+          failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
+      end
+    | TypeLit t_l -> begin
+        let open AST.TypeLit in
+        try
+          let stp = Hashtbl.find types t_l.TypeLit.name in
+          let tal = build_alloca stp.ltp "" builder in
+          List.iter (fun (nm, ex) ->
+              if List.mem_assoc nm stp.fields then
+                if (List.assoc nm stp.fields) = expr_type ex then
+                  let gep = build_struct_gep tal (list_index (nm, expr_type ex) stp.fields) "" builder in
+                  ignore(build_store (gen_expr ex) gep builder)
+                else
+                  failwith @@ Printf.sprintf "Wrong type assigned to field %s of custom type %s, expected %s, but got %s"
+                                             nm
+                                             t_l.name (string_of_ttype @@ List.assoc nm stp.fields) (string_of_ttype @@ expr_type ex)
+              else
+                failwith (Printf.sprintf "Can't find field %s with type %s in custom type %s"
+                                         nm
+                                         (string_of_ttype @@ expr_type ex) t_l.name)
+            ) t_l.TypeLit.fields;
+          build_load tal "" builder
+        with Not_found ->
+          failwith (Printf.sprintf "Undefined custom type: %s" t_l.name)
+      end
+    | TypeFieldLoad x -> begin
+        let tt_name = (string_of_ttype @@ expr_type x.TypeFieldLoad.from) in
+        let tp = Hashtbl.find types tt_name in
+
+        if List.mem_assoc x.field_name tp.BuiltType.fields then
+          let f_tp = List.assoc x.field_name tp.BuiltType.fields in
+
+          let tmp_val = build_alloca (get_llvm_type @@ expr_type x.from) "" builder in
+          ignore(build_store (gen_expr x.from) tmp_val builder);
+
+          build_load (build_struct_gep tmp_val (list_index (x.field_name, f_tp) tp.fields) "" builder) "" builder
+        else
+          failwith @@ Printf.sprintf "Undefined field %s for type %s" x.field_name tt_name
+      end
   in
 
   let gen_stmt st =
@@ -197,5 +255,13 @@ let codegen ast =
 
           Hashtbl.replace functions m_name { BuiltFnc.fnc; ret_value; ret_block; fnc_def = x };
           List.iter gen_stmt x.body;
+        end
+      | TypeDef x -> begin
+          let open AST.TypeDef in
+
+          let st_fields = List.map (fun (_, tp) -> get_llvm_type tp ) x.TypeDef.fields in
+          let st = named_struct_type context x.name in
+          struct_set_body st (Array.of_list st_fields) false;
+          Hashtbl.replace types x.name { BuiltType.ltp = st; tp = Custom x.name; fields = x.fields }
         end
     ) ast; modl;;

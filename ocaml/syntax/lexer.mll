@@ -24,6 +24,7 @@ rule token = parse
      | '=' { EQ }
      | '(' { OP_P }
      | ',' { COMMA }
+     | '.' { DOT }
      | ')' { CL_P }
      | '{' { OP_CB }
      | '}' { CL_CB }

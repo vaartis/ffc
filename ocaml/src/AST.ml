@@ -18,7 +18,7 @@ let ttype_of_string x =
   | "int" -> Int
   | "float" -> Float
   | "str" -> Str
-  | _ -> Void
+  | x -> Custom x
 
 
 module rec Expression : sig
@@ -28,6 +28,8 @@ module rec Expression : sig
     | StrLit of Str.t
     | Ident of Ident.t
     | FncCall of FncCall.t
+    | TypeLit of TypeLit.t
+    | TypeFieldLoad of TypeFieldLoad.t
 end = Expression
 
    and Int : sig
@@ -50,6 +52,13 @@ end = Expression
      type t = { name: string; args: Expression.t list }
    end = FncCall
 
+   and TypeLit : sig
+     type t = { name: string; fields: (string * Expression.t) list }
+   end = TypeLit
+
+   and TypeFieldLoad : sig
+     type t = { from: Expression.t; field_name: string }
+   end = TypeFieldLoad
 
    and Statement : sig
      type t =
