@@ -39,7 +39,7 @@ let codegen ast =
        try
          (Hashtbl.find types x).BuiltType.ltp
        with Not_found ->
-         failwith (Printf.sprintf "Undefined cystom type: %s" x)
+         failwith (Printf.sprintf "Undefined custom type: %s" x)
   in
 
   let rec expr_type ex =
@@ -128,7 +128,7 @@ let codegen ast =
         try
           let f = Hashtbl.find functions (mangle_call x) in
           let args = Array.of_list @@ List.map gen_expr x.args in
-          build_call f.BuiltFnc.fnc args x.name builder
+          build_call f.BuiltFnc.fnc args "" builder
         with Not_found ->
           failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
       end
@@ -253,6 +253,25 @@ let codegen ast =
            failwith @@ Printf.sprintf "Undefined variable: %s" x.name
        end
   in
+
+  let gen_compiled_in () =
+    let gen (name, arg1_t, arg2_t, ret_t, f) =
+      (* type t = { fnc: llvalue; ret_value: llvalue option; ret_block: llbasicblock; fnc_def: FncDef.t } *)
+      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
+      let m_name = mangle @@ FncDef f_def in
+      let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
+      position_at_end (entry_block fnc) builder;
+
+      let r_val = f (Array.get (params fnc) 0) ((Array.get (params fnc) 1)) "" builder in
+      ignore(build_ret r_val builder);
+      Hashtbl.replace functions m_name { BuiltFnc.fnc = fnc; ret_value = None; ret_block = entry_block fnc; fnc_def = f_def }
+    in
+    List.iter gen [
+                ("+", Int, Int, Int, build_add)
+              ]
+  in
+
+  gen_compiled_in ();
 
   List.iter (fun node ->
       Hashtbl.reset curr_variables;
