@@ -66,6 +66,7 @@ end = Expression
        | Decl of Decl.t
        | Ret of Ret.t
        | Assign of Assign.t
+       | TypeFieldAssign of TypeFieldAssign.t
    end = Statement
 
    and Decl : sig
@@ -79,6 +80,10 @@ end = Expression
    and Assign : sig
      type t = { name: string; value: Expression.t }
    end = Assign
+
+   and TypeFieldAssign : sig
+     type t = { name: string; field_name: string; value: Expression.t }
+   end = TypeFieldAssign
 
 module Include = struct
   type t = { modules: string list }

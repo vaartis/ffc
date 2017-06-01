@@ -24,6 +24,7 @@ let types = Hashtbl.create 0;;
 
 %type <AST.Decl.t> decl
 %type <AST.Ret.t> ret
+%type <AST.TypeFieldAssign.t> type_field_assign
 %type <AST.Statement.t> stmt
 
 %type <string> str
@@ -55,9 +56,13 @@ stmt:
     | assign SEMICOLON { Assign $1 }
     | decl SEMICOLON { Decl $1 }
     | ret SEMICOLON { Ret $1 }
+    | type_field_assign SEMICOLON { TypeFieldAssign $1 }
 
 assign:
     IDENT EQ expr { { Assign.name = $1; value = $3 } }
+
+type_field_assign:
+    IDENT DOT IDENT EQ expr { { TypeFieldAssign.name = $1; field_name = $3; value = $5 } }
 
 ret:
     RET expr { { Ret.value = Some $2 } }

@@ -25,6 +25,11 @@ let codegen_tests =
               ~exit_code:(Unix.WEXITED 13)
               ~sinput:(Stream.of_string @@ create_mod "fnc main() int { int x = 10; x = 13; ret x; }") ~ctxt "lli" []
           );
+          "Type field assignment" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 16)
+              ~sinput:(Stream.of_string @@ create_mod "type T { int x } fnc main() int { T x = T{ x = 10 }; x.x = 16; ret x.x; }") ~ctxt "lli" []
+          )
         ];
       "Expressions" >:::
         [

@@ -156,6 +156,7 @@ let codegen ast =
           failwith (Printf.sprintf "Undefined custom type: %s" t_l.name)
       end
     | TypeFieldLoad x -> begin
+        let open AST.TypeFieldLoad in
         begin
           match expr_type x.TypeFieldLoad.from with
           | Custom _ -> ()
@@ -213,17 +214,44 @@ let codegen ast =
         end;
         ignore(build_br f.BuiltFnc.ret_block builder)
       end
-    | Assign x -> let open AST.Assign in
-                  try
-                    let v = Hashtbl.find curr_variables x.Assign.name in
-                    if v.tp <> (expr_type x.value) then
-                      failwith (Printf.sprintf
-                                  "Wrong type assigned to `%s`, expected %s, but got %s"
-                                  x.name (string_of_ttype v.tp) (string_of_ttype @@ expr_type x.value))
-                    else
-                      ignore(build_store (gen_expr x.value) v.instance builder)
-                  with Not_found ->
-                    failwith (Printf.sprintf "Undefined variable: %s" x.name)
+    | Assign x -> begin
+        let open AST.Assign in
+        try
+          let v = Hashtbl.find curr_variables x.Assign.name in
+          if v.tp <> (expr_type x.value) then
+            failwith (Printf.sprintf
+                        "Wrong type assigned to `%s`, expected %s, but got %s"
+                        x.name (string_of_ttype v.tp) (string_of_ttype @@ expr_type x.value))
+          else
+            ignore(build_store (gen_expr x.value) v.instance builder)
+        with Not_found ->
+          failwith (Printf.sprintf "Undefined variable: %s" x.name)
+      end
+    | TypeFieldAssign x ->
+       let open AST.TypeFieldAssign in
+       begin
+         try
+           let v = Hashtbl.find curr_variables x.TypeFieldAssign.name in
+           let tt_name = string_of_ttype v.tp in
+           let tp = Hashtbl.find types tt_name in
+
+           begin
+             try
+               let f_tp = List.assoc x.field_name tp.BuiltType.fields in
+               let fld = build_struct_gep v.instance (list_index (x.field_name, f_tp) tp.fields) "" builder in
+
+               if f_tp = (expr_type x.value) then
+                 ignore(build_store (gen_expr x.value) fld builder)
+               else
+                 failwith @@ Printf.sprintf "Wrong type assigned to field %s of %s (of type %s), expected %s, but got %s"
+                               x.field_name x.name tt_name (string_of_ttype f_tp) (string_of_ttype @@ expr_type x.value)
+
+             with Not_found ->
+               failwith @@ Printf.sprintf "Undefined field %s for type %s" x.field_name tt_name
+           end
+         with Not_found ->
+           failwith @@ Printf.sprintf "Undefined variable: %s" x.name
+       end
   in
 
   List.iter (fun node ->
