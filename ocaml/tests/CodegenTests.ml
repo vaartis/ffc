@@ -37,6 +37,13 @@ let codegen_tests =
           "Type literal and field load" >:: (fun ctxt ->
             assert_command
               ~exit_code:(Unix.WEXITED 14)
-              ~sinput:(Stream.of_string @@ create_mod "type T { int x, int y } fnc main() int { T x = T{ x = 14, y = 0}; ret x.x; }") ~ctxt "lli" [])
+              ~sinput:(Stream.of_string @@ create_mod "type T { int x, int y } fnc main() int { T x = T{ x = 14, y = 0}; ret x.x; }") ~ctxt "lli" []
+          );
+
+          "Construct type literal and return it's field in place" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 15)
+              ~sinput:(Stream.of_string @@ create_mod "type T { int x, int y } fnc main() int { ret T{ x = 1, y = 15}.y; }") ~ctxt "lli" []
+          )
         ]
     ]

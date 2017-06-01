@@ -162,6 +162,7 @@ let codegen ast =
         if List.mem_assoc x.field_name tp.BuiltType.fields then
           let f_tp = List.assoc x.field_name tp.BuiltType.fields in
 
+          (* Build a temporary value to load from *)
           let tmp_val = build_alloca (get_llvm_type @@ expr_type x.from) "" builder in
           ignore(build_store (gen_expr x.from) tmp_val builder);
 

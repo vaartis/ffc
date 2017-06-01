@@ -1,8 +1,8 @@
 *.cm*
 *.mli
 *.o
-lexer.ml
-parser.ml
-main.*
+*.native
+*.byte
+_build
 Makefile
 configure
