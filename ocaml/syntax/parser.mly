@@ -9,6 +9,7 @@ let types = Hashtbl.create 0;;
 %token <int> INT
 %token <string> STR IDENT TYPE OPERATOR
 %token <float> FLOAT
+%token <bool> BOOL
 
 %type <AST.toplevel> top_level
 %type <AST.toplevel list> main
@@ -45,13 +46,14 @@ tp:
 expr:
     INT { IntLit { Int.value = $1 } }
     | FLOAT { FloatLit { Float.value = $1 } }
+    | BOOL { BoolLit { Bool.value = $1 } }
     | str { StrLit { Str.value = $1 } }
-    | IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $1; args = $3; from_tp = None } } (* Function call *)
+    | IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $1; args = $3; from = None } } (* Function call *)
     | IDENT { Ident { Ident.value = $1 } } (* Variable *)
     | custom_tp OP_CB separated_list(COMMA, separated_pair(IDENT, EQ, expr)) CL_CB { TypeLit { TypeLit.name = (string_of_ttype $1); fields = $3 } } (*Type literal*)
     | expr DOT IDENT { TypeFieldLoad { TypeFieldLoad.from = $1; field_name = $3 } } (* Type field load *)
-    | expr DOT IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $3; args = $5; from_tp = Some $1 } }
-    | expr OPERATOR expr { FncCall { FncCall.name = $2; args = [$1;$3]; from_tp = None } } (* Operator usage *)
+    | expr DOT IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $3; args = $5; from = Some $1 } }
+    | expr OPERATOR expr { FncCall { FncCall.name = $2; args = [$1;$3]; from = None } } (* Operator usage *)
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }

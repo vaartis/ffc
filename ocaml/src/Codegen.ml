@@ -34,6 +34,7 @@ let codegen ast =
     | Int -> i32_type context
     | Float -> float_type context
     | Str -> pointer_type @@ i8_type context
+    | Bool -> i1_type context
     | Void -> void_type context
     | Custom x ->
        try
@@ -45,9 +46,10 @@ let codegen ast =
   let rec expr_type ex =
     let open Expression in
     match ex with
-    | IntLit x ->  Int
-    | FloatLit x ->  Float
-    | StrLit x ->  Str
+    | IntLit _ -> Int
+    | FloatLit _ ->  Float
+    | StrLit _ ->  Str
+    | BoolLit _ -> Bool
     | Ident x -> let open AST.Ident in
                  (Hashtbl.find curr_variables x.value).DefinedVar.tp
     | FncCall x -> let open AST.FncCall in
@@ -98,7 +100,7 @@ let codegen ast =
       Printf.sprintf "R%i%s" (String.length s) s
     in
 
-    let from_tp = match ca.from_tp with
+    let from_tp = match ca.from with
       | Some x -> let tp = string_of_ttype @@ expr_type x in
                   Printf.sprintf "T%i%s" (String.length tp) tp
       | None -> ""
@@ -123,6 +125,8 @@ let codegen ast =
                     const_float (get_llvm_type Float) x.value
     | StrLit x -> let open AST.Str in
                   const_string context x.value
+    | BoolLit x -> let open AST.Bool in
+                   const_int (get_llvm_type Bool) (if x.value then 1 else 0)
     | Ident x -> begin
         let open AST.Ident in
         try
@@ -264,7 +268,6 @@ let codegen ast =
 
   let gen_compiled_in () =
     let gen (name, arg1_t, arg2_t, ret_t, f) =
-      (* type t = { fnc: llvalue; ret_value: llvalue option; ret_block: llbasicblock; fnc_def: FncDef.t } *)
       let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
       let m_name = mangle @@ FncDef f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
@@ -274,8 +277,56 @@ let codegen ast =
       ignore(build_ret r_val builder);
       Hashtbl.replace functions m_name { BuiltFnc.fnc = fnc; ret_value = None; ret_block = entry_block fnc; fnc_def = f_def }
     in
+
+    let gen_c_i (name, pred, arg1_t, arg2_t, ret_t, f) =
+      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
+      let m_name = mangle @@ FncDef f_def in
+      let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
+      position_at_end (entry_block fnc) builder;
+
+      let r_val = f pred (Array.get (params fnc) 0) ((Array.get (params fnc) 1)) "" builder in
+      ignore(build_ret r_val builder);
+      Hashtbl.replace functions m_name { BuiltFnc.fnc = fnc; ret_value = None; ret_block = entry_block fnc; fnc_def = f_def }
+    in
+
+    let gen_c_f (name, pred, arg1_t, arg2_t, ret_t, f) =
+      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
+      let m_name = mangle @@ FncDef f_def in
+      let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
+      position_at_end (entry_block fnc) builder;
+
+      let r_val = f pred (Array.get (params fnc) 0) ((Array.get (params fnc) 1)) "" builder in
+      ignore(build_ret r_val builder);
+      Hashtbl.replace functions m_name { BuiltFnc.fnc = fnc; ret_value = None; ret_block = entry_block fnc; fnc_def = f_def }
+    in
+
     List.iter gen [
-                ("+", Int, Int, Int, build_add)
+                ("+", Int, Int, Int, build_add);
+                ("-", Int, Int, Int, build_sub);
+                ("*", Int, Int, Int, build_mul);
+                ("/", Int, Int, Int, build_sdiv);
+
+                ("+", Float, Float, Float, build_fadd);
+                ("-", Float, Float, Float, build_fsub);
+                ("*", Float, Float, Float, build_fmul);
+                ("/", Float, Float, Float, build_fdiv);
+              ];
+
+    List.iter gen_c_i [
+                ("==", Icmp.Eq,  Int, Int, Bool, build_icmp);
+                ("!=", Icmp.Ne,  Int, Int, Bool, build_icmp);
+                (">=", Icmp.Sge, Int, Int, Bool, build_icmp);
+                ("<=", Icmp.Sle, Int, Int, Bool, build_icmp);
+                (">",  Icmp.Sgt, Int, Int, Bool, build_icmp);
+                ("<",  Icmp.Slt, Int, Int, Bool, build_icmp)
+              ];
+    List.iter gen_c_f [
+                ("==", Fcmp.Oeq,  Float, Float, Bool, build_fcmp);
+                ("!=", Fcmp.One,  Float, Float, Bool, build_fcmp);
+                (">=", Fcmp.Oge, Float, Float, Bool, build_fcmp);
+                ("<=", Fcmp.Ole, Float, Float, Bool, build_fcmp);
+                (">",  Fcmp.Ogt, Float, Float, Bool, build_fcmp);
+                ("<",  Fcmp.Olt, Float, Float, Bool, build_fcmp);
               ]
   in
 

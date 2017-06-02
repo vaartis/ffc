@@ -3,6 +3,7 @@ type ttype =
   | Float
   | Str
   | Void
+  | Bool
   | Custom of string
 
 let string_of_ttype x =
@@ -11,6 +12,7 @@ let string_of_ttype x =
   | Float -> "Float"
   | Str -> "Str"
   | Void -> "Void"
+  | Bool -> "Bool"
   | Custom(x) -> x
 
 let ttype_of_string x =
@@ -18,6 +20,7 @@ let ttype_of_string x =
   | "int" -> Int
   | "float" -> Float
   | "str" -> Str
+  | "bool" -> Bool
   | x -> Custom x
 
 
@@ -26,6 +29,7 @@ module rec Expression : sig
     | IntLit of Int.t
     | FloatLit of Float.t
     | StrLit of Str.t
+    | BoolLit of Bool.t
     | Ident of Ident.t
     | FncCall of FncCall.t
     | TypeLit of TypeLit.t
@@ -44,12 +48,16 @@ end = Expression
       type t = { value: string }
    end = Str
 
+   and Bool : sig
+     type t = { value: bool }
+   end = Bool
+
    and Ident : sig
      type t = { value: string }
    end = Ident
 
    and FncCall : sig
-     type t = { name: string; args: Expression.t list; from_tp: Expression.t option }
+     type t = { name: string; args: Expression.t list; from: Expression.t option }
    end = FncCall
 
    and TypeLit : sig

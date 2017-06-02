@@ -7,6 +7,7 @@
 rule token = parse
      [' ' '\t' '\n'] { token lexbuf }
      | [';'] { SEMICOLON }
+     | ("true")|("false") { BOOL(bool_of_string (Lexing.lexeme lexbuf)) }
      | ['0' - '9']+ { INT(int_of_string (Lexing.lexeme lexbuf)) }
      | ['0' - '9'] '.' ['0' - '9'] { FLOAT(float_of_string (Lexing.lexeme lexbuf)) }
      | "fnc" { FNC }
@@ -15,6 +16,7 @@ rule token = parse
      | "operator" { OPERATOR_KW }
      | ['!' '~' '@' '#' '$' '%' '^' '&' '*' '-' '+' '\\' '/' '<' '>']['!' '~' '@' '#' '$' '%' '^' '&' '*' '-' '+' '\\' '/' '<' '>' '=']*
                                                         { OPERATOR(Lexing.lexeme lexbuf)}
+     | "==" { OPERATOR(Lexing.lexeme lexbuf)}
      | "extern" { EXTERN }
      | "implement" { IMPLEMENT }
      | "for" { FOR }
@@ -28,7 +30,7 @@ rule token = parse
      | ')' { CL_P }
      | '{' { OP_CB }
      | '}' { CL_CB }
-     | ("int")|("float")|("str") { TYPE(Lexing.lexeme lexbuf) }
+     | ("int")|("float")|("str")|("bool") { TYPE(Lexing.lexeme lexbuf) }
      | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '_' '0' - '9']* { IDENT(Lexing.lexeme lexbuf) }
 
 {
