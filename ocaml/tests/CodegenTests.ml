@@ -56,5 +56,12 @@ let codegen_tests =
               ~exit_code:(Unix.WEXITED 16)
               ~sinput:(Stream.of_string @@ create_mod "operator ++(int x, int y) int { ret x + y + 1; } fnc main() int { ret 8 ++ 7; } ") ~ctxt "lli" []
           );
+
+           "Type function call" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 17)
+              ~sinput:(Stream.of_string @@ create_mod "type T { int x } implement for T { fnc pl_some(int x) int { ret self.x + x; } }\
+                                                       fnc main() int { ret T{ x = 10 }.pl_some(7); }") ~ctxt "lli" []
+          )
         ]
     ]
