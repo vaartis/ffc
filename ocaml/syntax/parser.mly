@@ -85,11 +85,11 @@ fnc_def:
     FNC IDENT OP_P separated_list(COMMA, pair(tp, IDENT)) CL_P tp? OP_CB stmt* CL_CB {
                               { FncDef.name = $2; args = Array.of_list (List.map (fun (x,y) -> (y, x)) $4); body = $8; ret_t = (match $6 with
                                                                                                         | None -> Void
-                                                                                                        | Some x -> x) } }
+                                                                                                        | Some x -> x); from = None } }
 
 operator_def:
     OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(tp, IDENT)) CL_P tp OP_CB stmt* CL_CB {
-                { FncDef.name = $2;  args = Array.of_list (List.map (fun (x,y) -> (y, x)) $4); body = $8; ret_t = ($6) } }
+                { FncDef.name = $2;  args = Array.of_list (List.map (fun (x,y) -> (y, x)) $4); body = $8; ret_t = ($6); from = None } }
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(tp, IDENT)) CL_CB {
@@ -100,7 +100,7 @@ extern:
     EXTERN IDENT OP_P separated_list(COMMA, pair(tp, IDENT*)) CL_P { { Extern.name = $2; args = (List.map (fun (x,y) -> x) $4) } }
 
 impl:
-    IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { Implement.tp = $3; functions = $5 } }
+    IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { Implement.tp = $3; functions = (List.map (fun x -> { x with FncDef.from = Some $3 } ) $5) } }
 
 top_level:
     incl { Include $1 }

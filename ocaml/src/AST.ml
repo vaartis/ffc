@@ -57,7 +57,7 @@ end = Expression
    end = Ident
 
    and FncCall : sig
-     type t = { name: string; args: Expression.t list; from: Expression.t option }
+     type t = { name: string; mutable args: Expression.t list; from: Expression.t option }
    end = FncCall
 
    and TypeLit : sig
@@ -97,7 +97,7 @@ module Include = struct
   type t = { modules: string list }
 end;;
 module FncDef = struct
-    type t = { name: string; args: (string * ttype) array; body: Statement.t list; ret_t: ttype }
+    type t = { name: string; mutable args: (string * ttype) array; body: Statement.t list; ret_t: ttype; from: string option }
 end;;
 module TypeDef = struct
   type t = { name: string; fields : (string * ttype) list }

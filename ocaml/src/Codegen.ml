@@ -70,22 +70,24 @@ let codegen ast =
         Printf.sprintf "%i%s" (String.length ltp_s) ltp_s
       end
 
-  and mangle fn =
+  and mangle (fn : FncDef.t) =
     let trav_ar_arr x = Array.fold_left (fun acc (_, tp) ->
                              let ltp = get_llvm_type tp in
                              Printf.sprintf "%sA%s" acc (mangle_type_name ltp)) "" x in
 
-    let (name, arg_str, ret_t) = match fn with
-      | FncDef { FncDef.name; args; ret_t; _ } | OperatorDef { FncDef.name; args; ret_t; _ } -> (name, trav_ar_arr args, ret_t)
-      | _ -> assert false
-    in
+    let (name, arg_str, ret_t) = (fn.name, trav_ar_arr fn.args, fn.ret_t) in
 
     let ret_s =
       let ltp_s = string_of_lltype @@ get_llvm_type ret_t in
       Printf.sprintf "R%i%s" (String.length ltp_s) ltp_s
     in
 
-    Printf.sprintf "_FFN%i%s%s%s" (String.length name) name arg_str ret_s
+    let tp_s = match fn.from with
+      | Some x -> Printf.sprintf "T%i%s" (String.length x) x
+      | None -> ""
+    in
+
+    Printf.sprintf "_FF%sN%i%s%s%s" tp_s (String.length name) name arg_str ret_s
 
   and mangle_call ca =
     let name = ca.FncCall.name in
@@ -110,10 +112,15 @@ let codegen ast =
   in
 
   let string_of_fnc_call f =
+    let tp_s = match f.FncCall.from with
+             | Some x -> Printf.sprintf "%s." @@ string_of_ttype @@ expr_type x
+             | None -> ""
+    in
+
     let ar_l = List.map (fun x -> string_of_ttype @@ expr_type x) f.FncCall.args in
     let ar_s = String.concat ", " ar_l in
     let ret_s = string_of_ttype @@ expr_type @@ FncCall f in
-    Printf.sprintf "%s(%s) %s" f.name ar_s ret_s
+    Printf.sprintf "%s%s(%s) %s" tp_s f.name ar_s ret_s
   in
 
   let rec gen_expr ex =
@@ -138,6 +145,12 @@ let codegen ast =
     | FncCall x -> begin
         let open AST.FncCall in
         try
+          begin
+            match x.from with
+            | Some fr -> x.args <- fr :: x.args
+            | None -> ()
+          end;
+
           let f = Hashtbl.find functions (mangle_call x) in
           let args = Array.of_list @@ List.map gen_expr x.args in
           build_call f.BuiltFnc.fnc args "" builder
@@ -268,8 +281,8 @@ let codegen ast =
 
   let gen_compiled_in () =
     let gen (name, arg1_t, arg2_t, ret_t, f) =
-      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
-      let m_name = mangle @@ FncDef f_def in
+      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
+      let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
       position_at_end (entry_block fnc) builder;
 
@@ -279,8 +292,8 @@ let codegen ast =
     in
 
     let gen_c_i (name, pred, arg1_t, arg2_t, ret_t, f) =
-      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
-      let m_name = mangle @@ FncDef f_def in
+      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
+      let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
       position_at_end (entry_block fnc) builder;
 
@@ -290,8 +303,8 @@ let codegen ast =
     in
 
     let gen_c_f (name, pred, arg1_t, arg2_t, ret_t, f) =
-      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t } in
-      let m_name = mangle @@ FncDef f_def in
+      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
+      let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
       position_at_end (entry_block fnc) builder;
 
@@ -334,41 +347,52 @@ let codegen ast =
 
   List.iter (fun node ->
       Hashtbl.reset curr_variables;
+
+      let gen_fnc x =
+        let open AST.FncDef in
+
+        begin
+          match x.from with
+          | Some xx -> x.args <- (Array.append [|("self", Custom xx)|] x.args)
+          | None -> ();
+        end;
+
+        let m_name = if x.name <> "main" then mangle x else x.name in
+
+        curr_fn_name := m_name;
+        let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.map (fun (x,y) -> get_llvm_type y) x.args) in
+        let fnc = define_function m_name ftype modl in
+        position_at_end (entry_block fnc) builder;
+
+        let ret_block = append_block context "exit" fnc in
+        let ret_value = match x.FncDef.ret_t with
+          | Void -> position_at_end ret_block builder;
+                    ignore(build_ret_void builder);
+                    None
+          | va ->
+             let r = build_alloca (get_llvm_type va) "ret_val" builder in
+             position_at_end ret_block builder;
+             ignore(build_ret (build_load r "" builder) builder);
+             Some r in
+        position_at_end (entry_block fnc) builder;
+
+        position_at_end (entry_block fnc) builder;
+
+        (* Make variables from arguments *)
+
+        Array.iteri (fun i par ->
+            let r_param = Array.get x.args i in
+            let p = build_alloca (type_of par) (fst r_param) builder in
+            ignore(build_store par p builder);
+            Hashtbl.replace curr_variables (fst r_param) { DefinedVar.tp = snd r_param; instance = p };
+          ) (params fnc);
+
+        Hashtbl.replace functions m_name { BuiltFnc.fnc; ret_value; ret_block; fnc_def = x };
+        List.iter gen_stmt x.body
+      in
+
       match node with
-      | FncDef x | OperatorDef x -> begin
-          let open AST.FncDef in
-          let m_name = if x.name <> "main" then mangle node else x.name in
-          curr_fn_name := m_name;
-          let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.map (fun (x,y) -> get_llvm_type y) x.args) in
-          let fnc = define_function m_name ftype modl in
-          position_at_end (entry_block fnc) builder;
-
-          let ret_block = append_block context "exit" fnc in
-          let ret_value = match x.FncDef.ret_t with
-            | Void -> position_at_end ret_block builder;
-                      ignore(build_ret_void builder);
-                      None
-            | va ->
-               let r = build_alloca (get_llvm_type va) "ret_val" builder in
-               position_at_end ret_block builder;
-               ignore(build_ret (build_load r "" builder) builder);
-               Some r in
-          position_at_end (entry_block fnc) builder;
-
-          position_at_end (entry_block fnc) builder;
-
-          (* Make variables from arguments *)
-
-          Array.iteri (fun i par ->
-              let r_param = Array.get x.args i in
-              let p = build_alloca (type_of par) (fst r_param) builder in
-              ignore(build_store par p builder);
-              Hashtbl.replace curr_variables (fst r_param) { DefinedVar.tp = snd r_param; instance = p };
-            ) (params fnc);
-
-          Hashtbl.replace functions m_name { BuiltFnc.fnc; ret_value; ret_block; fnc_def = x };
-          List.iter gen_stmt x.body;
-        end
+      | FncDef x | OperatorDef x -> gen_fnc x
       | TypeDef x -> begin
           let open AST.TypeDef in
 
@@ -377,4 +401,5 @@ let codegen ast =
           struct_set_body st (Array.of_list st_fields) false;
           Hashtbl.replace types x.name { BuiltType.ltp = st; tp = Custom x.name; fields = x.fields }
         end
+      | Implement x -> List.iter gen_fnc x.functions
     ) ast; modl;;
