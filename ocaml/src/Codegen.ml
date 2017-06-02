@@ -25,6 +25,7 @@ let codegen ast =
   let builder = builder context in
 
   let functions = Hashtbl.create 1 in
+  let externed = Hashtbl.create 0 in
   let curr_variables = Hashtbl.create 0 in
   let types = Hashtbl.create 0 in
   let curr_fn_name = ref "" in
@@ -131,7 +132,7 @@ let codegen ast =
     | FloatLit x -> let open AST.Float in
                     const_float (get_llvm_type Float) x.value
     | StrLit x -> let open AST.Str in
-                  const_string context x.value
+                  build_global_stringptr x.value "" builder
     | BoolLit x -> let open AST.Bool in
                    const_int (get_llvm_type Bool) (if x.value then 1 else 0)
     | Ident x -> begin
@@ -144,18 +145,27 @@ let codegen ast =
       end
     | FncCall x -> begin
         let open AST.FncCall in
-        try
-          begin
-            match x.from with
-            | Some fr -> x.args <- fr :: x.args
-            | None -> ()
-          end;
+        begin
+          match x.from with
+          | Some fr -> x.args <- fr :: x.args
+          | None -> ()
+        end;
 
-          let f = Hashtbl.find functions (mangle_call x) in
-          let args = Array.of_list @@ List.map gen_expr x.args in
-          build_call f.BuiltFnc.fnc args "" builder
-        with Not_found ->
-          failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
+        let f =
+          begin
+            try
+              (Hashtbl.find functions (mangle_call x)).fnc
+            with Not_found ->
+              begin
+                try
+                  Hashtbl.find externed x.name
+                with Not_found ->
+                  failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
+              end
+          end
+        in
+        let args = Array.of_list @@ List.map gen_expr x.args in
+        build_call f args "" builder
       end
     | TypeLit t_l -> begin
         let open AST.TypeLit in
@@ -284,6 +294,8 @@ let codegen ast =
       let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
       let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
+      set_linkage Linkage.Link_once fnc;
+      add_function_attr fnc (create_enum_attr context "alwaysinline" 0L) AttrIndex.Function;
       position_at_end (entry_block fnc) builder;
 
       let r_val = f (Array.get (params fnc) 0) ((Array.get (params fnc) 1)) "" builder in
@@ -295,6 +307,8 @@ let codegen ast =
       let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
       let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
+      set_linkage Linkage.Link_once fnc;
+      add_function_attr fnc (create_enum_attr context "alwaysinline" 0L) AttrIndex.Function;
       position_at_end (entry_block fnc) builder;
 
       let r_val = f pred (Array.get (params fnc) 0) ((Array.get (params fnc) 1)) "" builder in
@@ -306,6 +320,8 @@ let codegen ast =
       let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
       let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
+      set_linkage Linkage.Link_once fnc;
+      add_function_attr fnc (create_enum_attr context "alwaysinline" 0L) AttrIndex.Function;
       position_at_end (entry_block fnc) builder;
 
       let r_val = f pred (Array.get (params fnc) 0) ((Array.get (params fnc) 1)) "" builder in
@@ -354,7 +370,8 @@ let codegen ast =
         begin
           match x.from with
           | Some xx -> x.args <- (Array.append [|("self", Custom xx)|] x.args)
-          | None -> ();
+          | None -> ()
+
         end;
 
         let m_name = if x.name <> "main" then mangle x else x.name in
@@ -402,4 +419,10 @@ let codegen ast =
           Hashtbl.replace types x.name { BuiltType.ltp = st; tp = Custom x.name; fields = x.fields }
         end
       | Implement x -> List.iter gen_fnc x.functions
+      | Extern x -> let fnc = declare_function x.Extern.name
+                                               (function_type
+                                                  (get_llvm_type x.ret_t)
+                                                  (Array.of_list (List.map get_llvm_type x.args))) modl
+                    in
+                    Hashtbl.replace externed x.name fnc
     ) ast; modl;;

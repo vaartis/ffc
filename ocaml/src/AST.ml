@@ -103,7 +103,7 @@ module TypeDef = struct
   type t = { name: string; fields : (string * ttype) list }
 end;;
 module Extern = struct
-  type t = { name: string; args: ttype list }
+  type t = { name: string; args: ttype list; ret_t: ttype }
 end;;
 module Implement = struct
   type t = { tp: string; functions : FncDef.t list}

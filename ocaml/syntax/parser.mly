@@ -97,7 +97,9 @@ type_def:
                                { TypeDef.name = $2; fields = (List.map (fun (x,y) -> (y, x)) $4) } }
 
 extern:
-    EXTERN IDENT OP_P separated_list(COMMA, pair(tp, IDENT*)) CL_P { { Extern.name = $2; args = (List.map (fun (x,y) -> x) $4) } }
+    EXTERN IDENT OP_P separated_list(COMMA, pair(tp, IDENT?)) CL_P tp? { { Extern.name = $2; args = (List.map (fun (x,y) -> x) $4); ret_t = (match $6 with
+                                                                                                        | None -> Void
+                                                                                                        | Some x -> x); } }
 
 impl:
     IMPLEMENT FOR IDENT OP_CB fnc_def* CL_CB { { Implement.tp = $3; functions = (List.map (fun x -> { x with FncDef.from = Some $3 } ) $5) } }
