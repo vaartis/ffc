@@ -29,6 +29,12 @@ let codegen_tests =
             assert_command
               ~exit_code:(Unix.WEXITED 16)
               ~sinput:(Stream.of_string @@ create_mod "type T { int x } fnc main() int { T x = T{ x = 10 }; x.x = 16; ret x.x; }") ~ctxt "lli" []
+          );
+
+          "If statement" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 19)
+              ~sinput:(Stream.of_string @@ create_mod "fnc main() int { int x = 0; if false { x = 10; } else { x = 19; } ret x; }") ~ctxt "lli" []
           )
         ];
       "Expressions" >:::
@@ -62,6 +68,12 @@ let codegen_tests =
               ~exit_code:(Unix.WEXITED 17)
               ~sinput:(Stream.of_string @@ create_mod "type T { int x } implement for T { fnc pl_some(int x) int { ret self.x + x; } }\
                                                        fnc main() int { ret T{ x = 10 }.pl_some(7); }") ~ctxt "lli" []
+          );
+
+           "If expression" >:: (fun ctxt ->
+            assert_command
+              ~exit_code:(Unix.WEXITED 18)
+              ~sinput:(Stream.of_string @@ create_mod "fnc main() int { ret if true { if false { 0 } else { 18 } } else { 0 }; }") ~ctxt "lli" []
           )
         ]
     ]

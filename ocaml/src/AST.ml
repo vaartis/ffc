@@ -34,6 +34,7 @@ module rec Expression : sig
     | FncCall of FncCall.t
     | TypeLit of TypeLit.t
     | TypeFieldLoad of TypeFieldLoad.t
+    | If of If.t
 end = Expression
 
    and Int : sig
@@ -68,9 +69,15 @@ end = Expression
      type t = { from: Expression.t; field_name: string }
    end = TypeFieldLoad
 
+   and If : sig
+     type t = { cond: Expression.t; if_br: Statement.t list;
+                else_br: (Statement.t list) option; if_val: Expression.t option; else_val: Expression.t option }
+   end = If
+
    and Statement : sig
      type t =
        | ExprAsStmt of Expression.t
+       | If of If.t
        | Decl of Decl.t
        | Ret of Ret.t
        | Assign of Assign.t

@@ -21,6 +21,7 @@ let types = Hashtbl.create 0;;
 %type <AST.Implement.t> impl
 %type <AST.ttype> tp custom_tp
 
+%type <AST.If.t> if_stmt if_expr
 %type <AST.Expression.t> expr
 
 %type <AST.Decl.t> decl
@@ -30,7 +31,7 @@ let types = Hashtbl.create 0;;
 
 %type <string> str
 
-%token FNC INCLUDE SEMICOLON COMMA DOT EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ RET
+%token FNC INCLUDE SEMICOLON COMMA DOT EOF OP_P CL_P OP_CB CL_CB TYPE_KW OPERATOR_KW EXTERN FOR IMPLEMENT EQ RET IF ELSE
 
 %start main
 
@@ -43,6 +44,14 @@ tp:
     TYPE { ttype_of_string $1 }
     | custom_tp { $1 }
 
+if_expr:
+    IF expr OP_CB stmt+ expr CL_CB ELSE OP_CB stmt+ expr CL_CB { { If.cond = $2; if_br = $4; else_br = Some $9; if_val = Some $5; else_val = Some $10 } }
+    | IF expr OP_CB expr CL_CB ELSE OP_CB expr CL_CB { { If.cond = $2; if_br = []; else_br = Some []; if_val = Some $4; else_val = Some $8 } }
+
+if_stmt:
+    IF expr OP_CB stmt* CL_CB { { If.cond = $2; if_br = $4; else_br = None; if_val = None; else_val = None } }
+    | IF expr OP_CB stmt* CL_CB ELSE OP_CB stmt* CL_CB { { If.cond = $2; if_br = $4; else_br = Some $8; if_val = None; else_val = None } }
+
 expr:
     INT { IntLit { Int.value = $1 } }
     | FLOAT { FloatLit { Float.value = $1 } }
@@ -54,6 +63,7 @@ expr:
     | expr DOT IDENT { TypeFieldLoad { TypeFieldLoad.from = $1; field_name = $3 } } (* Type field load *)
     | expr DOT IDENT OP_P separated_list(COMMA, expr) CL_P { FncCall { FncCall.name = $3; args = $5; from = Some $1 } }
     | expr OPERATOR expr { FncCall { FncCall.name = $2; args = [$1;$3]; from = None } } (* Operator usage *)
+    | if_expr { If $1 }
 
 stmt:
     expr SEMICOLON { ExprAsStmt $1 }
@@ -61,6 +71,7 @@ stmt:
     | assign SEMICOLON { Assign $1 }
     | decl SEMICOLON { Decl $1 }
     | ret SEMICOLON { Ret $1 }
+    | if_stmt { If $1 }
 
 assign:
     IDENT EQ expr { { Assign.name = $1; value = $3 } }

@@ -17,7 +17,15 @@ end;;
 let rec list_index x lst =
     match lst with
     | [] -> raise Not_found
-    | h :: t -> if x = h then 0 else 1 + list_index x t
+    | h :: t -> if x = h then 0 else 1 + list_index x t;;
+
+let unwrap o = match o with
+  | Some x -> x
+  | None -> failwith "Unwrapped None";;
+
+let is_some o = match o with
+  | Some _ -> true
+  | None -> false;;
 
 let codegen ast =
   let context = global_context () in
@@ -59,12 +67,15 @@ let codegen ast =
                    (Hashtbl.find types x.name).BuiltType.tp
     | TypeFieldLoad x -> let open AST.TypeFieldLoad in
                          List.assoc x.TypeFieldLoad.field_name (Hashtbl.find types (string_of_ttype (expr_type x.from))).BuiltType.fields
+    | If x -> let open AST.If in
+              match x.if_val with
+              | Some x -> expr_type x
+              | None -> failwith "This `if` is not an expression!"
 
   and mangle_type_name ltp = match (classify_type ltp) with
     | Llvm.TypeKind.Struct -> begin
-        match struct_name ltp with
-        | Some nm -> Printf.sprintf "%i%s" (String.length nm) nm
-        | None -> assert false
+        let nm = unwrap (struct_name ltp) in
+        Printf.sprintf "%i%s" (String.length nm) nm
       end
     | _ -> begin
         let ltp_s = string_of_lltype ltp in
@@ -212,9 +223,69 @@ let codegen ast =
         else
           failwith @@ Printf.sprintf "Undefined field %s for type %s" x.field_name tt_name
       end
-  in
+    | If x -> gen_if x
 
-  let gen_stmt st =
+  and gen_if iff =
+    let open AST.If in
+    let curr_f = Hashtbl.find functions !curr_fn_name in
+
+    let curr_bb = insertion_block builder in
+
+    let cond = gen_expr iff.cond
+    and th_b = ref (append_block context "if.then" curr_f.fnc)
+    and el_b = ref (append_block context "if.else" curr_f.fnc)
+    and af_b = append_block context "if.end" curr_f.fnc in
+
+    move_block_after curr_bb !th_b;
+    move_block_after !th_b !el_b;
+    move_block_after !el_b af_b;
+
+    position_at_end curr_bb builder;
+    ignore(build_cond_br cond !th_b !el_b builder);
+
+    position_at_end !th_b builder;
+    List.iter gen_stmt iff.if_br;
+    let if_val = match iff.if_val with
+      | Some x -> Some (gen_expr x)
+      | None -> None
+    in
+    th_b := insertion_block builder; (* Update for phi *)
+    ignore(build_br af_b builder);
+
+
+    let else_val = begin
+        match iff.else_br with
+        | Some else_br -> begin
+            position_at_end !el_b builder;
+            List.iter gen_stmt else_br;
+            let else_val = match iff.else_val with
+              | Some x -> Some (gen_expr x)
+              | None -> None
+            in
+            el_b := insertion_block builder; (* Update for phi *)
+            ignore(build_br af_b builder);
+            else_val
+          end
+        | None -> None
+      end
+    in
+
+    position_at_end af_b builder;
+
+    match (if_val, else_val) with
+    | (Some i, Some e) -> begin
+        if (type_of i) = (type_of e) then
+          build_phi [(i, !th_b); (e, !el_b)] "" builder
+        else
+          failwith @@
+            Printf.sprintf "If and else branches have different types: %s and %s"
+                           (string_of_ttype @@ expr_type @@ unwrap iff.if_val)
+                           (string_of_ttype @@ expr_type @@ unwrap iff.else_val)
+      end
+    | (Some _, None) | (None, Some _) -> failwith "Both if and else branches in an if-expression must have value" (* Won't happen, parser handles that*)
+    | _ -> cond
+
+  and gen_stmt st =
     let open AST.Statement in
     match st with
     | Decl x -> begin
@@ -287,6 +358,7 @@ let codegen ast =
          with Not_found ->
            failwith @@ Printf.sprintf "Undefined variable: %s" x.name
        end
+    | If x -> ignore(gen_if x)
   in
 
   let gen_compiled_in () =
