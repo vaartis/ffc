@@ -6,7 +6,7 @@ module BuiltFnc = struct
 end;;
 
 module BuiltType = struct
-  type t = { tp: ttype; ltp: lltype; fields: (string * ttype) list}
+  type t = { tp: ttype; ltp: lltype; fields: (string * ttype) list; mixins: string list option }
 end;;
 
 module DefinedVar = struct
@@ -33,6 +33,7 @@ let codegen ast =
   let builder = builder context in
 
   let functions = Hashtbl.create 1 in
+  let mixins = Hashtbl.create 0 in
   let externed = Hashtbl.create 0 in
   let curr_variables = Hashtbl.create 0 in
   let types = Hashtbl.create 0 in
@@ -83,23 +84,25 @@ let codegen ast =
       end
 
   and mangle (fn : FncDef.t) =
-    let trav_ar_arr x = Array.fold_left (fun acc (_, tp) ->
+    let trav_ar_list x = List.fold_left (fun acc (_, tp) ->
                              let ltp = get_llvm_type tp in
                              Printf.sprintf "%sA%s" acc (mangle_type_name ltp)) "" x in
 
-    let (name, arg_str, ret_t) = (fn.name, trav_ar_arr fn.args, fn.ret_t) in
+    let (name, arg_str, ret_t) = (fn.name, trav_ar_list fn.args, fn.ret_t) in
 
     let ret_s =
       let ltp_s = string_of_lltype @@ get_llvm_type ret_t in
       Printf.sprintf "R%i%s" (String.length ltp_s) ltp_s
     in
 
-    let tp_s = match fn.from with
+    let tp_or_mixin_s = match fn.from with
       | Some x -> Printf.sprintf "T%i%s" (String.length x) x
-      | None -> ""
+      | None -> match fn.mixin with
+                | Some x -> Printf.sprintf "MI%i%s" (String.length x) x
+                | None -> ""
     in
 
-    Printf.sprintf "_FF%sN%i%s%s%s" tp_s (String.length name) name arg_str ret_s
+    Printf.sprintf "_FF%sN%i%s%s%s" tp_or_mixin_s (String.length name) name arg_str ret_s
 
   and mangle_call ca =
     let name = ca.FncCall.name in
@@ -158,7 +161,19 @@ let codegen ast =
         let open AST.FncCall in
         begin
           match x.from with
-          | Some fr -> x.args <- fr :: x.args
+          | Some fr ->
+             begin
+               let tp = Hashtbl.find types (string_of_ttype @@ expr_type @@ unwrap x.from) in
+               match tp.mixins with
+               | Some ms ->
+                  begin
+                    if not (List.exists (fun m -> let mm = Hashtbl.find mixins m in
+                                                  List.exists (fun f -> (f.FncDef.name = x.name)) mm.MixinDef.functions
+                                        ) ms) then
+                      x.args <- fr :: x.args
+                  end
+               | None -> x.args <- fr :: x.args
+             end
           | None -> ()
         end;
 
@@ -363,7 +378,7 @@ let codegen ast =
 
   let gen_compiled_in () =
     let gen (name, arg1_t, arg2_t, ret_t, f) =
-      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
+      let f_def = { FncDef.name = name; args = [("x", arg1_t); ("y", arg2_t)]; body = []; ret_t; from = None; mixin = None } in
       let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
       set_linkage Linkage.Link_once fnc;
@@ -376,7 +391,7 @@ let codegen ast =
     in
 
     let gen_c_i (name, pred, arg1_t, arg2_t, ret_t, f) =
-      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
+      let f_def = { FncDef.name = name; args = [("x", arg1_t); ("y", arg2_t)]; body = []; ret_t; from = None; mixin = None } in
       let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
       set_linkage Linkage.Link_once fnc;
@@ -389,7 +404,7 @@ let codegen ast =
     in
 
     let gen_c_f (name, pred, arg1_t, arg2_t, ret_t, f) =
-      let f_def = { FncDef.name = name; args = [|("x", arg1_t); ("y", arg2_t)|]; body = []; ret_t; from = None } in
+      let f_def = { FncDef.name = name; args = [("x", arg1_t); ("y", arg2_t)]; body = []; ret_t; from = None; mixin = None } in
       let m_name = mangle @@ f_def in
       let fnc = define_function m_name (function_type (get_llvm_type ret_t) [|get_llvm_type arg1_t; get_llvm_type arg2_t|]) modl in
       set_linkage Linkage.Link_once fnc;
@@ -441,7 +456,7 @@ let codegen ast =
 
         begin
           match x.from with
-          | Some xx -> x.args <- (Array.append [|("self", Custom xx)|] x.args)
+          | Some xx -> x.args <- ("self", Custom xx) :: x.args
           | None -> ()
 
         end;
@@ -449,7 +464,7 @@ let codegen ast =
         let m_name = if x.name <> "main" then mangle x else x.name in
 
         curr_fn_name := m_name;
-        let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.map (fun (x,y) -> get_llvm_type y) x.args) in
+        let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.of_list(List.map (fun (x,y) -> get_llvm_type y) x.args)) in
         let fnc = define_function m_name ftype modl in
         position_at_end (entry_block fnc) builder;
 
@@ -470,7 +485,7 @@ let codegen ast =
         (* Make variables from arguments *)
 
         Array.iteri (fun i par ->
-            let r_param = Array.get x.args i in
+            let r_param = List.nth x.args i in
             let p = build_alloca (type_of par) (fst r_param) builder in
             ignore(build_store par p builder);
             Hashtbl.replace curr_variables (fst r_param) { DefinedVar.tp = snd r_param; instance = p };
@@ -488,9 +503,36 @@ let codegen ast =
           let st_fields = List.map (fun (_, tp) -> get_llvm_type tp ) x.TypeDef.fields in
           let st = named_struct_type context x.name in
           struct_set_body st (Array.of_list st_fields) false;
-          Hashtbl.replace types x.name { BuiltType.ltp = st; tp = Custom x.name; fields = x.fields }
+          Hashtbl.replace types x.name { BuiltType.ltp = st; tp = Custom x.name; fields = x.fields; mixins = x.mixins };
+
+          begin
+            match x.mixins with
+            | Some ms -> List.iter (fun m ->
+                             let m_o = try
+                                 Hashtbl.find mixins m
+                               with Not_found ->
+                                 failwith @@ Printf.sprintf "Undefined mixin: %s" m in
+                             List.iter (fun fn ->
+                                 let name_in_mixin = mangle fn in
+                                 let genned_mixin_fnc = Hashtbl.find functions name_in_mixin in
+                                 let name_in_type = mangle {
+                                                        fn with mixin = None;
+                                                                from = Some x.name;
+                                                      }
+                                 in
+                                 let genned_in_type = add_alias modl (type_of genned_mixin_fnc.fnc) genned_mixin_fnc.fnc name_in_type in
+                                 Hashtbl.replace functions name_in_type { genned_mixin_fnc with fnc = genned_in_type }
+                               ) m_o.MixinDef.functions
+                           ) ms
+            | None -> ()
+          end
         end
-      | Implement x -> List.iter gen_fnc x.functions
+      | Implement { functions = x }  -> List.iter gen_fnc x
+      | MixinDef x -> begin
+          List.iter gen_fnc x.functions;
+          Hashtbl.replace mixins x.name x
+        end
+
       | Extern x -> let fnc = declare_function x.Extern.name
                                                (function_type
                                                   (get_llvm_type x.ret_t)

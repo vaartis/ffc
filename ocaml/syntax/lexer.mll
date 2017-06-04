@@ -1,6 +1,6 @@
 {
   open Parser;;
-  exception Eof;;
+  exception SyntaxErr of string;;
   let filename = ref "";;
 }
 
@@ -19,6 +19,8 @@ rule token = parse
      | "==" { OPERATOR(Lexing.lexeme lexbuf)}
      | "extern" { EXTERN }
      | "implement" { IMPLEMENT }
+     | "mixin" { MIXIN }
+     | "with" { WITH }
      | "for" { FOR }
      | "if" { IF }
      | "else" { ELSE }
@@ -34,6 +36,7 @@ rule token = parse
      | '}' { CL_CB }
      | ("int")|("float")|("str")|("bool") { TYPE(Lexing.lexeme lexbuf) }
      | ['a'-'z' 'A'-'Z' '_']['a'-'z' 'A'-'Z' '_' '0' - '9']* { IDENT(Lexing.lexeme lexbuf) }
+     | _ { raise (SyntaxErr ("Unexpected character: " ^ Lexing.lexeme lexbuf)) }
 
 {
 let sprintf = Printf.sprintf;;

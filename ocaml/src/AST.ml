@@ -100,26 +100,45 @@ end = Expression
      type t = { name: string; field_name: string; value: Expression.t }
    end = TypeFieldAssign
 
-module Include = struct
+module rec Include : sig
   type t = { modules: string list }
-end;;
-module FncDef = struct
-    type t = { name: string; mutable args: (string * ttype) array; body: Statement.t list; ret_t: ttype; from: string option }
-end;;
-module TypeDef = struct
-  type t = { name: string; fields : (string * ttype) list }
-end;;
-module Extern = struct
-  type t = { name: string; args: ttype list; ret_t: ttype }
-end;;
-module Implement = struct
-  type t = { tp: string; functions : FncDef.t list}
-end;;
+end = Include
+
+   and FncDef : sig
+     type t = { name: string;
+                mutable args: (string * ttype) list;
+                body: Statement.t list;
+                ret_t: ttype;
+                from: string option;
+                mixin: string option;
+              }
+   end = FncDef
+
+   and TypeDef : sig
+     type t = {
+         name: string;
+         fields : (string * ttype) list;
+         mixins: string list option
+       }
+   end = TypeDef
+
+   and MixinDef : sig
+     type t = { name: string; functions: FncDef.t list }
+   end = MixinDef
+
+   and Extern : sig
+     type t = { name: string; args: ttype list; ret_t: ttype }
+   end = Extern
+
+   and Implement : sig
+     type t = { tp: string; functions : FncDef.t list}
+   end = Implement
 
 type toplevel =
   | Include of Include.t
   | FncDef of FncDef.t
   | OperatorDef of FncDef.t
   | TypeDef of TypeDef.t
+  | MixinDef of MixinDef.t
   | Extern of Extern.t
   | Implement of Implement.t;;
