@@ -1,0 +1,12 @@
+OCB_FLAGS = -use-ocamlfind -use-menhir -Is syntax,src -cflags "-w -40"
+OCB = @OCAMLBUILD@ ${OCB_FLAGS}
+
+all:
+	${OCB} main.byte
+
+test:
+	${OCB} -I tests -pkg oUnit run_tests.native
+
+clean:
+	${OCB} -clean
+	rm -rf config.* configure autom4te.cache

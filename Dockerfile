@@ -1,14 +1,18 @@
 # Base image
 FROM fedora:rawhide
 
-# Install CMake, compilers, GTest
-RUN dnf install -y wget cmake make gcc-c++ clang pkgconfig git llvm\
-                   llvm-libs llvm-devel libedit-devel zlib-devel\
-                   elfutils-devel libcurl-devel python2
+USER root
 
-RUN git clone https://github.com/SimonKagstrom/kcov && cd kcov && git checkout tags/v31 && cmake . && make install
+RUN dnf install -y ocaml ocamldoc wget llvm llvm-libs llvm-devel unzip m4 which make cmake\
+                    patch pkgconfig redhat-rpm-config gcc gcc-c++ sqlite-devel libcurl-devel\
+                    fuse-devel zlib-devel ocaml-camlp4-devel libcurl-devel autoconf automake
 
 WORKDIR /ff
 COPY . /ff
 
-RUN cmake . -Dtest=ON -DCMAKE_BUILD_TYPE=Debug
+RUN wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
+
+RUN opam init -a
+RUN opam install -y ctypes llvm ounit ocamlfind ocamlbuild menhir
+
+CMD eval `opam config env` && autoreconf && ./configure --enable-tests && make test && ./run_tests.native

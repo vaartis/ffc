@@ -1,6 +1,0 @@
-!Makefile
-!test.ff
-*.o
-ffc.yy.cpp
-ffc.flex.cpp
-lexer

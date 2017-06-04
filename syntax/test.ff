@@ -1,3 +1,0 @@
-operator +(ref int x, ref str y) ref int { ret x; }
-
-fnc main() { x = 1; }

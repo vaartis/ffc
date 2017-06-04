@@ -1,16 +1,11 @@
 sudo: required
 
-language: cpp
-
-compiler:
-  - clang
-  - gcc
-
 services:
   - docker
 
-before_install:
-- docker build -t ff .
-
 script:
-  - docker run ff /bin/bash -c "cmake --build . && kcov --exclude-pattern=/usr/include,test,include --coveralls-id=$TRAVIS_JOB_ID coverage ./run_tests"
+  - docker build -t ff .
+  - docker run ff
+
+env:
+  - PATH=$HOME/.local/bin:$PATH
