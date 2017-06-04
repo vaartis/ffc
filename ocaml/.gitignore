@@ -1,8 +1,0 @@
-*.cm*
-*.mli
-*.o
-*.native
-*.byte
-_build
-Makefile
-configure
