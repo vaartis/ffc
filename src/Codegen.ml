@@ -34,7 +34,7 @@ let codegen ast =
   let externed = Hashtbl.create 0 in
   let curr_variables = Hashtbl.create 0 in
   let types = Hashtbl.create 0 in
-  let curr_fn_name = ref "" in
+  let curr_fn_name = Global.empty "Current function name" in
 
   let get_llvm_type tp =
     match tp with
@@ -47,7 +47,7 @@ let codegen ast =
        try
          (Hashtbl.find types x).BuiltType.ltp
        with Not_found ->
-         failwith (Printf.sprintf "Undefined custom type: %s" x)
+         failwith @@ Printf.sprintf "Undefined custom type: %s" x
   in
 
   let mangle_mixin_var tp_name
@@ -66,49 +66,27 @@ let codegen ast =
     | BoolLit _ -> Bool
     | Ident x -> let open AST.Ident in
                  (Hashtbl.find curr_variables x.value).DefinedVar.tp
-    | FncCall x ->
-       begin
-         let open AST.FncCall in
-         let res = ref None in
-         Hashtbl.iter (fun _ va ->
-             let is_needed_fnc = (va.BuiltFnc.fnc_def.name = x.name)
-                                 && (try
-                                       (List.for_all2 (fun ca_ar m_ar -> (expr_type ca_ar) = (snd m_ar) ) x.args va.fnc_def.args)
-                                     with Invalid_argument _ ->
-                                       false
-                                    )
-             in
-             if is_needed_fnc then
-               res := Some va.fnc_def.ret_t
-           ) functions;
-         match !res with
-         | Some s -> s
-         | None ->
-            begin
-              try
-                (Hashtbl.find externed x.name).BuiltExterned.ret_t
-              with Not_found ->
-                failwith @@ Printf.sprintf "Can't find function %s" x.name
-            end
-       end
-    | TypeLit x -> let open AST.TypeLit in
-                   (Hashtbl.find types x.name).BuiltType.tp
-    | TypeFieldLoad x -> let open AST.TypeFieldLoad in
-                         List.assoc x.TypeFieldLoad.field_name (Hashtbl.find types (string_of_ttype (expr_type x.from))).BuiltType.fields
-    | If x -> let open AST.If in
-              match x.if_val with
-              | Some x -> expr_type x
-              | None -> failwith "This `if` is not an expression!"
+    | FncCall x -> (try
+                      Hashtbl.values functions
+                      |> Enum.find (fun va -> (va.BuiltFnc.fnc_def.name = x.name) &&
+                                                (try
+                                                   (List.for_all2 (fun ca_ar m_ar -> (expr_type ca_ar) = (snd m_ar) ) x.args va.fnc_def.args)
+                                                 with Invalid_argument _ ->
+                                                   false))
+                    with Not_found ->
+                      failwith @@ Printf.sprintf "Can't find function %s" x.name
+                   ).fnc_def.ret_t
+    | TypeLit x -> (Hashtbl.find types x.name).BuiltType.tp
+    | TypeFieldLoad x -> List.assoc x.TypeFieldLoad.field_name (Hashtbl.find types (string_of_ttype (expr_type x.from))).BuiltType.fields
+    | If x -> Option.get x.if_val |> expr_type
 
   and mangle_type_name ltp = match (classify_type ltp) with
-    | Llvm.TypeKind.Struct -> begin
+    | Llvm.TypeKind.Struct ->
         let nm = Option.get (struct_name ltp) in
         Printf.sprintf "%i%s" (String.length nm) nm
-      end
-    | _ -> begin
+    | _ ->
         let ltp_s = string_of_lltype ltp in
         Printf.sprintf "%i%s" (String.length ltp_s) ltp_s
-      end
 
   and mangle (fn : FncDef.t) =
     let trav_ar_list x = List.fold_left (fun acc (_, tp) ->
@@ -122,10 +100,7 @@ let codegen ast =
       Printf.sprintf "R%i%s" (String.length ltp_s) ltp_s
     in
 
-    let tp_s = match fn.from with
-      | Some x -> Printf.sprintf "T%i%s" (String.length x) x
-      | None -> ""
-    in
+    let tp_s = Option.map_default (fun x -> Printf.sprintf "T%i%s" (String.length x) x) "" fn.from in
 
     Printf.sprintf "_FF%sN%i%s%s%s" tp_s (String.length name) name arg_str ret_s
 
@@ -142,22 +117,17 @@ let codegen ast =
       Printf.sprintf "R%i%s" (String.length s) s
     in
 
-    let from_tp = match ca.from with
-      | Some x -> let tp = string_of_ttype @@ expr_type x in
-                  Printf.sprintf "T%i%s" (String.length tp) tp
-      | None -> ""
+    let from_tp = Option.map_default (fun x -> let tp = string_of_ttype @@ expr_type x in
+                                               Printf.sprintf "T%i%s" (String.length tp) tp) "" ca.from
     in
 
     Printf.sprintf "_FF%sN%i%s%s%s" from_tp (String.length name) name ar_str ret_s
   in
 
   let string_of_fnc_call f =
-    let tp_s = match f.FncCall.from with
-             | Some x -> Printf.sprintf "%s." @@ string_of_ttype @@ expr_type x
-             | None -> ""
-    in
+    let tp_s = Option.map_default (Printf.sprintf "%s." % string_of_ttype % expr_type) "" f.FncCall.from in
 
-    let ar_l = List.map (fun x -> string_of_ttype @@ expr_type x) f.FncCall.args in
+    let ar_l = List.map (string_of_ttype % expr_type) f.FncCall.args in
     let ar_s = String.concat ", " ar_l in
     let ret_s = string_of_ttype @@ expr_type @@ FncCall f in
     Printf.sprintf "%s%s(%s) %s" tp_s f.name ar_s ret_s
@@ -166,22 +136,15 @@ let codegen ast =
   let rec gen_expr ex =
     let open AST.Expression in
     match ex with
-    | IntLit x -> let open AST.Int in
-                  const_int (get_llvm_type Int) x.value
-    | FloatLit x -> let open AST.Float in
-                    const_float (get_llvm_type Float) x.value
-    | StrLit x -> let open AST.Str in
-                  build_global_stringptr x.value "" builder
-    | BoolLit x -> let open AST.Bool in
-                   const_int (get_llvm_type Bool) (if x.value then 1 else 0)
-    | Ident x -> begin
-        let open AST.Ident in
-        try
-          let var = Hashtbl.find curr_variables x.value in
-          build_load var.DefinedVar.instance "" builder
-        with Not_found ->
-          failwith (Printf.sprintf "Undefined variable: %s" x.value)
-      end
+    | IntLit x -> const_int (get_llvm_type Int) x.value
+    | FloatLit x -> const_float (get_llvm_type Float) x.value
+    | StrLit x -> build_global_stringptr x.value "" builder
+    | BoolLit x -> const_int (get_llvm_type Bool) @@ Bool.to_int x.value
+    | Ident x -> build_load (try
+                               Hashtbl.find curr_variables x.value
+                             with Not_found ->
+                               failwith @@ Printf.sprintf "Undefined variable: %s" x.value
+                            ).DefinedVar.instance "" builder
     | FncCall x -> begin
         let open AST.FncCall in
         begin
@@ -211,9 +174,9 @@ let codegen ast =
             with Not_found ->
               begin
                 try
-                  (Hashtbl.find externed x.name).fnc
+                  (Hashtbl.find externed x.name).BuiltExterned.fnc
                 with Not_found ->
-                  failwith (Printf.sprintf "Undefined function: %s" (string_of_fnc_call x))
+                  failwith @@ Printf.sprintf "Undefined function: %s" (string_of_fnc_call x)
               end
           end
         in
@@ -235,13 +198,13 @@ let codegen ast =
                                              nm
                                              t_l.name (string_of_ttype @@ List.assoc nm stp.fields) (string_of_ttype @@ expr_type ex)
               else
-                failwith (Printf.sprintf "Can't find field %s with type %s in custom type %s"
+                failwith @@ Printf.sprintf "Can't find field %s with type %s in custom type %s"
                                          nm
-                                         (string_of_ttype @@ expr_type ex) t_l.name)
+                                         (string_of_ttype @@ expr_type ex) t_l.name
             ) t_l.TypeLit.fields;
           build_load tal "" builder
         with Not_found ->
-          failwith (Printf.sprintf "Undefined custom type: %s" t_l.name)
+          failwith @@ Printf.sprintf "Undefined custom type: %s" t_l.name
       end
     | TypeFieldLoad x -> begin
         let open AST.TypeFieldLoad in
@@ -269,7 +232,7 @@ let codegen ast =
 
   and gen_if iff =
     let open AST.If in
-    let curr_f = Hashtbl.find functions !curr_fn_name in
+    let curr_f = Hashtbl.find functions @@ Global.get_exn curr_fn_name in
 
     let curr_bb = insertion_block builder in
 
@@ -293,7 +256,6 @@ let codegen ast =
     in
     th_b := insertion_block builder; (* Update for phi *)
     ignore(build_br af_b builder);
-
 
     let else_val = begin
         match iff.else_br with
@@ -350,7 +312,7 @@ let codegen ast =
     | ExprAsStmt x -> ignore(gen_expr x)
     | Ret x -> begin
         let open AST.Ret in
-        let f = Hashtbl.find functions !curr_fn_name in
+        let f = Hashtbl.find functions @@ Global.get_exn curr_fn_name in
         begin
           match x.value with
           | None -> ()
@@ -367,13 +329,13 @@ let codegen ast =
         try
           let v = Hashtbl.find curr_variables x.Assign.name in
           if v.tp <> (expr_type x.value) then
-            failwith (Printf.sprintf
+            failwith @@ Printf.sprintf
                         "Wrong type assigned to `%s`, expected %s, but got %s"
-                        x.name (string_of_ttype v.tp) (string_of_ttype @@ expr_type x.value))
+                        x.name (string_of_ttype v.tp) (string_of_ttype @@ expr_type x.value)
           else
             ignore(build_store (gen_expr x.value) v.instance builder)
         with Not_found ->
-          failwith (Printf.sprintf "Undefined variable: %s" x.name)
+          failwith @@ Printf.sprintf "Undefined variable: %s" x.name
       end
     | TypeFieldAssign x ->
        let open AST.TypeFieldAssign in
@@ -503,8 +465,8 @@ let codegen ast =
                  | None -> x.args <- ("self", Custom xx) :: x.args;
                end;
 
-               Option.may (fun mixin_vars ->
-                   Hashtbl.iter (fun nam va -> Hashtbl.replace curr_variables nam va) mixin_vars
+               Option.may (
+                   Hashtbl.iter (fun nam va -> Hashtbl.replace curr_variables nam va)
                  ) deft.mixin_vars
             end
           | None -> ()
@@ -512,9 +474,10 @@ let codegen ast =
 
         let m_name = if x.name <> "main" then mangle x else x.name in
 
-        curr_fn_name := m_name;
+        Global.set curr_fn_name m_name;
 
-        let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.of_list(List.map (fun (x,y) -> get_llvm_type y) x.args)) in
+        let ftype = function_type (get_llvm_type x.FncDef.ret_t) (Array.of_list
+                                                                    (List.map (get_llvm_type % snd) x.args)) in
         let fnc = define_function m_name ftype modl in
         position_at_end (entry_block fnc) builder;
 
@@ -551,7 +514,7 @@ let codegen ast =
          begin
            let open AST.TypeDef in
 
-           let st_fields = List.map (fun (_, tp) -> get_llvm_type tp ) x.fields in
+           let st_fields = List.map (get_llvm_type % snd) x.fields in
            let st = named_struct_type context x.name in
            struct_set_body st (Array.of_list st_fields) false;
            let sttt = { BuiltType.ltp = st; tp = Custom x.name; fields = x.fields; mixins = x.mixins; mixin_vars = Some (Hashtbl.create 0) } in

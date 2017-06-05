@@ -2,8 +2,9 @@
 open AST;;
 open AST.Expression;;
 open AST.Statement;;
+open Batteries.DynArray;;
 
-let types = Hashtbl.create 0;;
+let types = BatDynArray.create ();;
 %}
 
 %token <int> INT
@@ -41,7 +42,7 @@ let types = Hashtbl.create 0;;
 %%
 
 custom_tp:
-    IDENT { try ignore(Hashtbl.find types $1); Custom $1 with Not_found -> failwith (Printf.sprintf "Unknown type: %s" $1) }
+    IDENT { try ignore(BatDynArray.index_of ((=) $1) types); Custom $1 with Not_found -> failwith (Printf.sprintf "Unknown type: %s" $1) }
 
 tp:
     TYPE { ttype_of_string $1 }
@@ -114,10 +115,10 @@ mixin_def:
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(tp, IDENT)) CL_CB {
-                               Hashtbl.replace types $2 ();
+                               BatDynArray.add types $2;
                                { TypeDef.name = $2; fields = (List.map (fun (x,y) -> (y, x)) $4); mixins = None } }
     | TYPE_KW IDENT WITH MIXIN separated_nonempty_list(COMMA, IDENT) OP_CB separated_list(COMMA, pair(tp, IDENT)) CL_CB {
-                               Hashtbl.replace types $2 ();
+                               BatDynArray.add types $2;
                                { TypeDef.name = $2; fields = (List.map (fun (x,y) -> (y, x)) $7); mixins = Some $5 }
     }
 
