@@ -79,9 +79,9 @@ let codegen_tests =
            "Mixin usage" >:: (fun ctxt ->
             assert_command
               ~exit_code:(Unix.WEXITED 19)
-              ~sinput:(Stream.of_string @@ create_mod "mixin mix { fnc test() int { ret 1; } } type test_ty with mixin mix { int x }\
-                                                       implement for test_ty { fnc chew() int { ret 18; } } fnc main() int {\
-                                                       test_ty x = test_ty { x = 10 }; ret x.test() + x.chew(); }") ~ctxt "lli" []
+              ~sinput:(Stream.of_string @@ create_mod "mixin mix { bool mixable = true; fnc isMixable() bool { ret mixable; } }\
+                                                      type T with mixin mix { int x } implement for T { fnc isMixable() bool { ret mixable; } }\
+                                                      fnc main() int { T x = T { x = 10 }; ret if x.isMixable() { 19 } else { 0 }; }") ~ctxt "lli" []
            );
         ]
     ]

@@ -1,1 +1,1 @@
-true: package(llvm, llvm.analysis, llvm.ipo), debug, use_menhir, explain
+true: package(batteries, llvm, llvm.analysis, llvm.ipo), debug, use_menhir, explain

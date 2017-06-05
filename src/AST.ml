@@ -110,20 +110,22 @@ end = Include
                 body: Statement.t list;
                 ret_t: ttype;
                 from: string option;
-                mixin: string option;
               }
    end = FncDef
 
    and TypeDef : sig
      type t = {
          name: string;
-         fields : (string * ttype) list;
+         mutable fields : (string * ttype) list;
          mixins: string list option
        }
    end = TypeDef
 
    and MixinDef : sig
-     type t = { name: string; functions: FncDef.t list }
+     type content =
+       | Var of Decl.t
+       | Fnc of FncDef.t
+     type t = { name: string; content: content list }
    end = MixinDef
 
    and Extern : sig

@@ -13,6 +13,6 @@ COPY . /ff
 RUN wget https://raw.github.com/ocaml/opam/master/shell/opam_installer.sh -O - | sh -s /usr/local/bin
 
 RUN opam init -a
-RUN opam install -y ctypes llvm ounit ocamlfind ocamlbuild menhir
+RUN opam install -y ctypes llvm ounit ocamlfind ocamlbuild menhir batteries
 
 CMD eval `opam config env` && autoreconf && ./configure --enable-tests && make test && ./run_tests.native

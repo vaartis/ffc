@@ -17,10 +17,12 @@ let types = Hashtbl.create 0;;
 %type <AST.FncDef.t> fnc_def
 %type <AST.FncDef.t> operator_def
 %type <AST.TypeDef.t> type_def
-%type <AST.MixinDef.t> mixin_def
 %type <AST.Extern.t> extern
 %type <AST.Implement.t> impl
 %type <AST.ttype> tp custom_tp
+
+%type <AST.MixinDef.t> mixin_def
+%type <AST.MixinDef.content> mixin_content
 
 %type <AST.If.t> if_stmt if_expr
 %type <AST.Expression.t> expr
@@ -97,14 +99,18 @@ fnc_def:
     FNC IDENT OP_P separated_list(COMMA, pair(tp, IDENT)) CL_P tp? OP_CB stmt* CL_CB {
                               { FncDef.name = $2; args = List.map (fun (x,y) -> (y, x)) $4; body = $8; ret_t = (match $6 with
                                                                                                         | None -> Void
-                                                                                                        | Some x -> x); from = None; mixin = None } }
+                                                                                                        | Some x -> x); from = None; } }
 
 operator_def:
     OPERATOR_KW OPERATOR OP_P separated_list(COMMA, pair(tp, IDENT)) CL_P tp OP_CB stmt* CL_CB {
-                { FncDef.name = $2; args = List.map (fun (x,y) -> (y, x)) $4; body = $8; ret_t = $6; from = None; mixin = None } }
+                { FncDef.name = $2; args = List.map (fun (x,y) -> (y, x)) $4; body = $8; ret_t = $6; from = None; } }
+
+mixin_content:
+    fnc_def { Fnc $1 }
+    | decl SEMICOLON { Var $1 }
 
 mixin_def:
-    MIXIN IDENT OP_CB fnc_def* CL_CB { { MixinDef.name = $2; functions = List.map (fun x -> { x with FncDef.mixin = Some $2 }) $4 } }
+    MIXIN IDENT OP_CB mixin_content* CL_CB { { MixinDef.name = $2; content = $4 } }
 
 type_def:
     TYPE_KW IDENT OP_CB separated_list(COMMA, pair(tp, IDENT)) CL_CB {
